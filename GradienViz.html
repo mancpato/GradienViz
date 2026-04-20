@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GradienViz</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/p5@1.9.4/lib/p5.min.js"></script>
+  <style>
+    :root {
+      --bg:       #0f0f13;
+      --surface:  #1a1a22;
+      --border:   #333344;
+      --text:     #c8c8d8;
+      --text-dim: #7a7a9a;
+      --accent:   #60a5fa;
+      --orange:   #f97316;
+      --green:    #22c55e;
+      --yellow:   #fbbf24;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      height: 36px;
+    }
+
+    #header h1 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+    }
+
+    #header .subtitle {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: 12px;
+    }
+
+    #main {
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      grid-template-rows: 1fr;
+      height: calc(100vh - 36px);
+      gap: 12px;
+      padding: 12px;
+    }
+
+    #canvas-wrap {
+      grid-column: 1;
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+    }
+
+    #defaultCanvas0 {
+      display: block !important;
+    }
+
+    #sidebar {
+      grid-column: 2;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 14px 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .ctrl-section { display: flex; flex-direction: column; gap: 8px; }
+
+    .ctrl-section-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+    }
+
+    .ctrl-row { display: flex; flex-direction: column; gap: 3px; }
+
+    .ctrl-label {
+      font-size: 14px;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .ctrl-label .val {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .ctrl-row input[type=range] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+      height: 14px;
+    }
+
+    .ctrl-inline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ctrl-inline label {
+      font-size: 13px;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    input[type=number] {
+      width: 56px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px 0;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn:hover  { background: var(--border); border-color: var(--accent); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-primary { background: #1d3a6e; border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #254d9a !important; }
+
+    .btn-danger  { border-color: #7f1d1d; color: #fca5a5; }
+    .btn-danger:hover  { background: #3d0a0a !important; }
+
+    #sidebar-spacer { flex: 1; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div style="display:flex;align-items:baseline">
+    <h1>GradienViz</h1>
+    <span class="subtitle">— Descenso por gradiente · Regresión lineal</span>
+  </div>
+  <span style="font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace">v2.0</span>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap"></div>
+  <div id="sidebar"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// BLOQUE A — Constantes y paletas de color
+// ═══════════════════════════════════════════════════════════════
+
+const VIRIDIS = [
+  [68,  1, 84],
+  [72, 40,120],
+  [62, 83,160],
+  [49,104,142],
+  [38,130,142],
+  [31,158,137],
+  [53,183,121],
+  [109,205, 89],
+  [180,222, 44],
+  [253,231, 37],
+];
+
+function viridis(t) {
+  t = Math.max(0, Math.min(1, t));
+  const n = VIRIDIS.length - 1;
+  const i = Math.floor(t * n);
+  const f = t * n - i;
+  if (i >= n) return VIRIDIS[n];
+  const a = VIRIDIS[i], b = VIRIDIS[i + 1];
+  return [
+    Math.round(a[0] + f * (b[0] - a[0])),
+    Math.round(a[1] + f * (b[1] - a[1])),
+    Math.round(a[2] + f * (b[2] - a[2])),
+  ];
+}
+
+function convColor(t) {
+  // t=0 → verde, t=1 → rojo
+  return `hsl(${Math.round(120 - 120 * t)},90%,55%)`;
+}
+
+const FS  = 14;  // font size base en px — cambia solo esto para recalibrar
+
+// Padding interno de cada panel (px)
+const PAD = { l: 52, r: 16, t: 18, b: 60 };
+
+// ═══════════════════════════════════════════════════════════════
+// BLOQUE B — Estado global
+// ═══════════════════════════════════════════════════════════════
+
+const G = {
+  puntos:   [],
+  m_star:   0, b_star: 0, J_star: 0,
+
+  m_lo: -0.8, m_hi: 1.8,
+  b_lo: -0.6, b_hi: 1.6,
+
+  resHeatmap:     8,
+  numTrayPorLado: 4,
+  eta:            0.05,
+  maxIter:        2000,
+  tolerancia:     1e-4,
+  dejarRastro:    true,
+  trajEnFoco:     0,
+
+  estado: 'idle',
+  paso:   0,
+
+  trayectorias: [],
+  histJ:        [],
+
+  bufHeatmap: null,
+  bufCampo:   null,
+  bufDirty:   true,
+
+  puntoDrag:  null,
+  puntoSelec: null,
+};
+
+// Paneles calculados en setup/resize
+const paneles = {
+  P1: { ox:0, oy:0, cw:0, ch:0 },
+  P2: { ox:0, oy:0, cw:0, ch:0 },
+  P3: { ox:0, oy:0, cw:0, ch:0 },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// BLOQUE C — Matemáticas puras
+// ═══════════════════════════════════════════════════════════════
+
+function calcRegresion(puntos) {
+  const n = puntos.length;
+  if (n < 3) return null;
+  let sx=0, sy=0, sxy=0, sx2=0;
+  for (const p of puntos) { sx+=p.x; sy+=p.y; sxy+=p.x*p.y; sx2+=p.x*p.x; }
+  const denom = n*sx2 - sx*sx;
+  if (Math.abs(denom) < 1e-12) return null;
+  const m = (n*sxy - sx*sy) / denom;
+  const b = (sy - m*sx) / n;
+  let J = 0;
+  for (const p of puntos) { const e = p.y - (m*p.x+b); J+=e*e; }
+  return { m_star: m, b_star: b, J_star: J/n };
+}
+
+function calcRango(m_star, b_star) {
+  const dm = Math.max(0.8, Math.abs(m_star) * 0.6);
+  const db = Math.max(0.6, Math.abs(b_star) * 0.6);
+  return { m_lo: m_star-dm, m_hi: m_star+dm, b_lo: b_star-db, b_hi: b_star+db };
+}
+
+function calcJ_mb(m, b) {
+  let J = 0;
+  for (const p of G.puntos) { const e = p.y-(m*p.x+b); J+=e*e; }
+  return G.puntos.length ? J/G.puntos.length : 0;
+}
+
+function dentroDePanel(panel, x, y) {
+  return x >= panel.ox && x <= panel.ox + panel.cw &&
+         y >= panel.oy && y <= panel.oy + panel.ch;
+}
+
+// ─── Funciones de mapeo ──────────────────────────────────────
+
+// Panel 1: datos [0,1]² → canvas pixels
+function d2c(panel, xd, yd) {
+  const { ox, oy, cw, ch } = panel;
+  return {
+    cx: ox + PAD.l + xd * (cw - PAD.l - PAD.r),
+    cy: oy + PAD.t + (1 - yd) * (ch - PAD.t - PAD.b),
+  };
+}
+
+// Panel 2: parámetros → canvas pixels
+function p2c(panel, m, b) {
+  const { ox, oy, cw, ch } = panel;
+  const tm = (m - G.m_lo) / (G.m_hi - G.m_lo);
+  const tb = (b - G.b_lo) / (G.b_hi - G.b_lo);
+  return {
+    cx: ox + PAD.l + tm * (cw - PAD.l - PAD.r),
+    cy: oy + PAD.t + (1 - tb) * (ch - PAD.t - PAD.b),
+  };
+}
+
+// Panel 3: iteración × J → canvas pixels (stub)
+function j2c(panel, iter, j) {
+  return { cx: panel.ox + PAD.l + iter, cy: panel.oy + PAD.t + j };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BLOQUE D — Lógica de estado
+// ═══════════════════════════════════════════════════════════════
+
+function recalcularTodo() {
+  const res = calcRegresion(G.puntos);
+  if (!res) return;
+  Object.assign(G, res, calcRango(res.m_star, res.b_star));
+  G.bufDirty = true;
+  limpiarTrayectorias();
+}
+
+function limpiarTrayectorias() {
+  G.trayectorias = [];
+  G.histJ = [];
+  G.paso  = 0;
+  G.estado = 'idle';
+  actualizarEstadoControles();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BLOQUE E — Renderizado
+// ═══════════════════════════════════════════════════════════════
+
+function formatearNum(v) {
+  return Math.abs(v)>=100 ? v.toFixed(0)
+       : Math.abs(v)>=10  ? v.toFixed(1)
+                           : v.toFixed(2);
+}
+
+function dibujarPanel(panel, titulo, bgR, bgG, bgB, brR, brG, brB) {
+  const { ox, oy, cw, ch } = panel;
+  fill(bgR, bgG, bgB);
+  stroke(brR, brG, brB);
+  strokeWeight(1.5);
+  rect(ox, oy, cw, ch, 3);
+
+  noStroke();
+  fill(160, 160, 180, 160);
+  textFont('IBM Plex Mono, monospace');
+  textSize(FS * 1.2);
+  textAlign(LEFT, CENTER);
+  text(titulo, ox + PAD.l, oy + PAD.t / 2);
+}
+
+function dibujarEjes(panel, xLo, xHi, yLo, yHi, nTicks) {
+  const { ox, oy, cw, ch } = panel;
+  const x0 = ox+PAD.l, y0 = oy+PAD.t;
+  const pw  = cw-PAD.l-PAD.r, ph = ch-PAD.t-PAD.b;
+
+  stroke(100,100,110); strokeWeight(1.5);
+  line(x0, y0,    x0,    y0+ph);
+  line(x0, y0+ph, x0+pw, y0+ph);
+
+  textFont('IBM Plex Mono, monospace');
+  textSize(FS);
+
+  for (let i=0; i<nTicks; i++) {
+    const t  = i/(nTicks-1);
+
+    const vx = xLo + t*(xHi-xLo);
+    const cx = x0 + t*pw;
+    stroke(100,100,110); strokeWeight(1);
+    line(cx, y0+ph, cx, y0+ph+4);
+    noStroke(); fill(130,130,145);
+    textAlign(CENTER, TOP);
+    text(formatearNum(vx), cx, y0+ph+6);
+
+    const vy = yLo + t*(yHi-yLo);
+    const cy = y0 + (1-t)*ph;
+    stroke(100,100,110); strokeWeight(1);
+    line(x0-4, cy, x0, cy);
+    noStroke(); fill(130,130,145);
+    textAlign(RIGHT, CENTER);
+    text(formatearNum(vy), x0-6, cy);
+  }
+}
+
+// ── Panel 1 ──────────────────────────────────────────────────
+
+function dibujarGridP1(panel) {
+  const { ox, oy, cw, ch } = panel;
+  const x0 = ox+PAD.l, y0 = oy+PAD.t;
+  const pw = cw-PAD.l-PAD.r, ph = ch-PAD.t-PAD.b;
+  stroke(195,195,200); strokeWeight(0.5);
+  drawingContext.setLineDash([2, 4]);
+  for (let i=1; i<=4; i++) {
+    const t = i/5;
+    line(x0 + t*pw,  y0,          x0 + t*pw,  y0+ph);
+    line(x0,         y0+(1-t)*ph, x0+pw,      y0+(1-t)*ph);
+  }
+  drawingContext.setLineDash([]);
+}
+
+function dibujarRectaRegresion(panel) {
+  if (G.puntos.length < 3) return;
+  const {cx:x0,cy:y0} = d2c(panel, 0, G.b_star);
+  const {cx:x1,cy:y1} = d2c(panel, 1, G.m_star+G.b_star);
+  drawingContext.setLineDash([6, 4]);
+  stroke(150,150,155); strokeWeight(1.5);
+  line(x0,y0,x1,y1);
+  drawingContext.setLineDash([]);
+}
+
+function dibujarPuntosP1(panel) {
+  for (const p of G.puntos) {
+    const {cx,cy} = d2c(panel, p.x, p.y);
+    stroke(255,255,255); strokeWeight(1.5);
+    fill(37,99,235);
+    ellipse(cx, cy, 12, 12);
+  }
+}
+
+function dibujarPanel1() {
+  const p = paneles.P1;
+  dibujarPanel(p, 'Espacio de datos', 245,245,248, 180,180,190);
+  dibujarGridP1(p);
+  dibujarEjes(p, 0, 1, 0, 1, 5);
+  dibujarRectaRegresion(p);
+  dibujarPuntosP1(p);
+
+  const nPts = G.puntos.length;
+  noStroke(); fill(110,110,130);
+  textFont('IBM Plex Mono, monospace');
+  textSize(FS);
+  textAlign(LEFT, BOTTOM);
+  text(
+    nPts >= 3
+      ? `${nPts}/20 pts  |  MSE: ${G.J_star.toFixed(4)}`
+      : `${nPts}/20 pts  (mín. 3 para entrenar)`,
+    p.ox + PAD.l, p.oy + p.ch - 22
+  );
+  if (nPts >= 3) {
+    text(
+      `m* = ${G.m_star.toFixed(3)}    b* = ${G.b_star.toFixed(3)}`,
+      p.ox + PAD.l, p.oy + p.ch - 4
+    );
+  }
+}
+
+// ── Panel 2 ──────────────────────────────────────────────────
+
+function construirHeatmap() {
+  const N = G.resHeatmap;
+  const celdas = [];
+  let Jmin=Infinity, Jmax=-Infinity;
+  for (let iy=0; iy<N; iy++) {
+    for (let ix=0; ix<N; ix++) {
+      const m = G.m_lo + (ix+0.5)/N*(G.m_hi-G.m_lo);
+      const b = G.b_lo + (iy+0.5)/N*(G.b_hi-G.b_lo);
+      const J = calcJ_mb(m, b);
+      celdas.push({J});
+      Jmin=Math.min(Jmin,J); Jmax=Math.max(Jmax,J);
+    }
+  }
+  const rng = Jmax-Jmin+1e-12;
+  for (const c of celdas) c.col = viridis((c.J-Jmin)/rng);
+  G.bufHeatmap = celdas;
+  G.bufDirty   = false;
+}
+
+function dibujarHeatmap(panel) {
+  const N  = G.resHeatmap;
+  const x0 = panel.ox+PAD.l, y0 = panel.oy+PAD.t;
+  const pw = panel.cw-PAD.l-PAD.r, ph = panel.ch-PAD.t-PAD.b;
+  const cw = pw/N, ch = ph/N;
+  noStroke();
+  for (let iy=0; iy<N; iy++) {
+    for (let ix=0; ix<N; ix++) {
+      const [r,g,b] = G.bufHeatmap[iy*N+ix].col;
+      fill(r,g,b);
+      rect(x0+ix*cw, y0+(N-1-iy)*ch, cw+1, ch+1);
+    }
+  }
+}
+
+function dibujarPuntoOptimo_P2(panel) {
+  if (G.puntos.length < 3) return;
+  const {cx,cy} = p2c(panel, G.m_star, G.b_star);
+  stroke(251,191,36); strokeWeight(2); noFill();
+  const r=7;
+  line(cx-r,cy,cx+r,cy); line(cx,cy-r,cx,cy+r);
+  ellipse(cx,cy,r*2.5,r*2.5);
+}
+
+function dibujarPanel2() {
+  dibujarPanel(paneles.P2, 'Espacio (m, b)', 17,17,17, 51,51,51);
+  if (G.puntos.length >= 3) {
+    if (G.bufDirty || !G.bufHeatmap) construirHeatmap();
+    dibujarHeatmap(paneles.P2);
+  }
+  dibujarEjes(paneles.P2, G.m_lo, G.m_hi, G.b_lo, G.b_hi, 5);
+  dibujarPuntoOptimo_P2(paneles.P2);
+}
+
+// ── Panel 3 ──────────────────────────────────────────────────
+
+function dibujarPanel3() {
+  dibujarPanel(paneles.P3, 'J(t)', 17,17,17, 51,51,51);
+  dibujarEjes(paneles.P3, 0, 1, 0, 1, 3);
+  if (G.histJ.length === 0) {
+    noStroke(); fill(100,100,120); textSize(FS); textAlign(CENTER,CENTER);
+    const p=paneles.P3;
+    text('sin datos aún', p.ox+p.cw/2, p.oy+p.ch/2);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BLOQUE F — Controles DOM
+// ═══════════════════════════════════════════════════════════════
+
+const RES_VALUES  = [6, 8, 10, 12, 16];
+const TRAY_VALUES = [3, 4, 5, 6];
+
+let elBtnTrain, elBtnReset, elBtnPuntos;
+let elSliderRes, elSliderTray, elSliderEta;
+let elCheckRastro, elInputFoco;
+let elValRes, elValTray, elValEta;
+
+function crearControles() {
+  const sb = document.getElementById('sidebar');
+  sb.innerHTML = '';
+
+  // ── Datos ────────────────────────────────────────────────
+  const secDatos = mkSection('Datos');
+  elBtnPuntos = mkBtn('Puntos aleatorios', '', () => {
+    G.puntos = Array.from({length:10}, () => ({x:Math.random(), y:Math.random()}));
+    recalcularTodo();
+  });
+  secDatos.appendChild(elBtnPuntos);
+  sb.appendChild(secDatos);
+
+  // ── Modelo ───────────────────────────────────────────────
+  const secModelo = mkSection('Modelo');
+
+  // resHeatmap (índice discreto)
+  [elSliderRes, elValRes] = mkSlider(
+    secModelo, 'Heatmap res', 0, RES_VALUES.length-1, RES_VALUES.indexOf(G.resHeatmap),
+    v => { G.resHeatmap = RES_VALUES[v]; G.bufDirty = true; return G.resHeatmap; }
+  );
+
+  // numTrayPorLado (índice discreto)
+  [elSliderTray, elValTray] = mkSlider(
+    secModelo, 'Trayectorias', 0, TRAY_VALUES.length-1, TRAY_VALUES.indexOf(G.numTrayPorLado),
+    v => { G.numTrayPorLado = TRAY_VALUES[v]; limpiarTrayectorias(); return G.numTrayPorLado; }
+  );
+
+  // eta (logarítmico)
+  [elSliderEta, elValEta] = mkSlider(
+    secModelo, 'η (lr)', 0, 100, etaToSlider(G.eta),
+    v => { G.eta = sliderToEta(v); limpiarTrayectorias(); return G.eta.toFixed(3); }
+  );
+
+  sb.appendChild(secModelo);
+
+  // ── Visualización ────────────────────────────────────────
+  const secVis = mkSection('Visualización');
+
+  const rowRastro = document.createElement('div');
+  rowRastro.className = 'ctrl-inline';
+  const lblRastro = document.createElement('label');
+  elCheckRastro = document.createElement('input');
+  elCheckRastro.type = 'checkbox';
+  elCheckRastro.checked = G.dejarRastro;
+  elCheckRastro.addEventListener('change', () => { G.dejarRastro = elCheckRastro.checked; });
+  lblRastro.appendChild(elCheckRastro);
+  lblRastro.appendChild(document.createTextNode('Dejar rastro'));
+  rowRastro.appendChild(lblRastro);
+  secVis.appendChild(rowRastro);
+
+  const rowFoco = document.createElement('div');
+  rowFoco.className = 'ctrl-inline';
+  const lblFoco = document.createElement('label');
+  lblFoco.textContent = 'Foco tray.';
+  lblFoco.style.color = 'var(--text-dim)';
+  lblFoco.style.fontSize = '11px';
+  elInputFoco = document.createElement('input');
+  elInputFoco.type  = 'number';
+  elInputFoco.min   = 0;
+  elInputFoco.max   = 35;
+  elInputFoco.value = G.trajEnFoco;
+  elInputFoco.addEventListener('change', () => {
+    G.trajEnFoco = Math.max(0, Math.min(35, +elInputFoco.value));
+    elInputFoco.value = G.trajEnFoco;
+  });
+  rowFoco.appendChild(lblFoco);
+  rowFoco.appendChild(elInputFoco);
+  secVis.appendChild(rowFoco);
+
+  sb.appendChild(secVis);
+
+  // ── Spacer ────────────────────────────────────────────────
+  const spacer = document.createElement('div');
+  spacer.id = 'sidebar-spacer';
+  sb.appendChild(spacer);
+
+  // ── Acciones ─────────────────────────────────────────────
+  const secAccion = mkSection('');
+  elBtnTrain = mkBtn('Train', 'btn-primary', () => { /* Etapa 3 */ });
+  elBtnReset = mkBtn('Reset', 'btn-danger',  () => { limpiarTrayectorias(); G.bufDirty = true; });
+  secAccion.appendChild(elBtnTrain);
+  secAccion.appendChild(elBtnReset);
+  sb.appendChild(secAccion);
+
+  actualizarEstadoControles();
+}
+
+function actualizarEstadoControles() {
+  if (!elBtnTrain) return;
+  const anim = G.estado === 'animando';
+  elBtnPuntos.disabled  = anim;
+  elSliderRes.disabled  = anim;
+  elSliderTray.disabled = anim;
+  elSliderEta.disabled  = anim;
+  elBtnTrain.textContent = anim ? 'Stop' : 'Train';
+  elBtnTrain.className   = 'btn ' + (anim ? 'btn-danger' : 'btn-primary');
+  elBtnReset.disabled    = G.estado === 'idle';
+}
+
+// ─── Helpers UI ──────────────────────────────────────────────
+
+function mkSection(titulo) {
+  const sec = document.createElement('div');
+  sec.className = 'ctrl-section';
+  if (titulo) {
+    const h = document.createElement('div');
+    h.className = 'ctrl-section-title';
+    h.textContent = titulo;
+    sec.appendChild(h);
+  }
+  return sec;
+}
+
+function mkBtn(label, cls, fn) {
+  const b = document.createElement('button');
+  b.className = 'btn' + (cls ? ' ' + cls : '');
+  b.textContent = label;
+  b.addEventListener('click', fn);
+  return b;
+}
+
+// Returns [sliderEl, valEl]
+function mkSlider(parent, label, min, max, val, onChange) {
+  const row = document.createElement('div');
+  row.className = 'ctrl-row';
+
+  const lbl = document.createElement('div');
+  lbl.className = 'ctrl-label';
+  const span = document.createElement('span');
+  span.textContent = label;
+  const valEl = document.createElement('span');
+  valEl.className = 'val';
+  // Display initial value via onChange which returns formatted value
+  valEl.textContent = (() => {
+    // peek at initial value without side-effects
+    if (label === 'Heatmap res')   return G.resHeatmap;
+    if (label === 'Trayectorias')  return G.numTrayPorLado;
+    if (label === 'η (lr)')        return G.eta.toFixed(3);
+    return val;
+  })();
+  lbl.appendChild(span);
+  lbl.appendChild(valEl);
+
+  const slider = document.createElement('input');
+  slider.type  = 'range';
+  slider.min   = min;
+  slider.max   = max;
+  slider.step  = 1;
+  slider.value = val;
+  slider.addEventListener('input', () => {
+    valEl.textContent = onChange(+slider.value);
+  });
+
+  row.appendChild(lbl);
+  row.appendChild(slider);
+  parent.appendChild(row);
+  return [slider, valEl];
+}
+
+function etaToSlider(eta) {
+  return Math.round(100 * Math.log(eta / 0.001) / Math.log(500));
+}
+function sliderToEta(s) {
+  return 0.001 * Math.pow(500, s / 100);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BLOQUE G — setup() / draw() / eventos p5.js (modo global)
+// ═══════════════════════════════════════════════════════════════
+
+function calcularPaneles() {
+  const W = width;
+  const H = height;
+  // P1: columna izquierda (~30%), P2: columna central (~55% = resto), P3: bajo P1 (~35% alto)
+  const colIzq  = Math.floor(W * 0.30);
+  const colCent = W - colIzq;
+  const p1h     = Math.floor(H * 0.65);
+  const p3h     = H - p1h;
+
+  paneles.P1 = { ox: 0,       oy: 0,   cw: colIzq,  ch: p1h };
+  paneles.P2 = { ox: colIzq,  oy: 0,   cw: colCent,  ch: H   };
+  paneles.P3 = { ox: 0,       oy: p1h, cw: colIzq,  ch: p3h };
+}
+
+function setup() {
+  const wrap = document.getElementById('canvas-wrap');
+  const cnv = createCanvas(wrap.clientWidth, wrap.clientHeight);
+  cnv.parent('canvas-wrap');
+  calcularPaneles();
+  crearControles();
+  frameRate(60);
+}
+
+function draw() {
+  // Fondo global
+  background(15, 15, 19);
+
+  dibujarPanel1();
+  dibujarPanel2();
+  dibujarPanel3();
+}
+
+function windowResized() {
+  const wrap = document.getElementById('canvas-wrap');
+  resizeCanvas(wrap.clientWidth, wrap.clientHeight);
+  calcularPaneles();
+  G.bufDirty = true;
+}
+
+function encontrarPunto(mx, my, umbral) {
+  let minD=Infinity, idx=null;
+  for (let i=0; i<G.puntos.length; i++) {
+    const {cx,cy} = d2c(paneles.P1, G.puntos[i].x, G.puntos[i].y);
+    const d = Math.hypot(mx-cx, my-cy);
+    if (d<minD) { minD=d; idx=i; }
+  }
+  return (minD <= umbral) ? idx : null;
+}
+
+function canvasToData(mx, my, panel) {
+  const x0=panel.ox+PAD.l, y0=panel.oy+PAD.t;
+  const pw=panel.cw-PAD.l-PAD.r, ph=panel.ch-PAD.t-PAD.b;
+  return { xd: constrain((mx-x0)/pw,0,1), yd: constrain(1-(my-y0)/ph,0,1) };
+}
+
+function agregarPunto(mx, my) {
+  const {xd,yd} = canvasToData(mx, my, paneles.P1);
+  G.puntos.push({x:xd, y:yd});
+}
+
+function mousePressed() {
+  if (G.estado === 'animando') return;
+  if (!dentroDePanel(paneles.P1, mouseX, mouseY)) return;
+
+  const idx = encontrarPunto(mouseX, mouseY, 12);
+
+  if (idx !== null) {
+    if (keyIsDown(CONTROL) || keyIsDown(SHIFT)) {
+      G.puntos.splice(idx, 1);
+      G.puntoDrag = null;
+      recalcularTodo();
+    } else {
+      G.puntoDrag = idx;
+    }
+  } else {
+    if (G.puntos.length < 20) {
+      agregarPunto(mouseX, mouseY);
+      recalcularTodo();
+    }
+  }
+}
+
+function mouseDragged() {
+  if (G.puntoDrag === null) return;
+  const {xd,yd} = canvasToData(mouseX, mouseY, paneles.P1);
+  G.puntos[G.puntoDrag] = {x:xd, y:yd};
+  recalcularTodo();
+}
+
+function mouseReleased() {
+  G.puntoDrag = null;
+}
+</script>
+</body>
+</html>
