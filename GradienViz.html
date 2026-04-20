@@ -331,9 +331,15 @@ function p2c(panel, m, b) {
   };
 }
 
-// Panel 3: iteración × J → canvas pixels (stub)
-function j2c(panel, iter, j) {
-  return { cx: panel.ox + PAD.l + iter, cy: panel.oy + PAD.t + j };
+function calcGradiente(m, b) {
+  const n = G.puntos.length;
+  let gm = 0, gb = 0;
+  for (const p of G.puntos) {
+    const r = m*p.x + b - p.y;
+    gm += r * p.x;
+    gb += r;
+  }
+  return { gm: 2*gm/n, gb: 2*gb/n };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -354,6 +360,76 @@ function limpiarTrayectorias() {
   G.paso  = 0;
   G.estado = 'idle';
   actualizarEstadoControles();
+}
+
+function inicializarTrayectorias() {
+  G.trayectorias = [];
+  G.histJ = [];
+  G.paso  = 0;
+  const N = G.numTrayPorLado;
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      const tm = N === 1 ? 0.5 : i/(N-1);
+      const tb = N === 1 ? 0.5 : j/(N-1);
+      const m0 = G.m_lo + (0.05 + 0.9*tm) * (G.m_hi - G.m_lo);
+      const b0 = G.b_lo + (0.05 + 0.9*tb) * (G.b_hi - G.b_lo);
+      G.trayectorias.push({
+        hist: [{m: m0, b: b0, J: calcJ_mb(m0, b0)}],
+        conv: false, iterConv: null,
+        div:  false,
+        colorFinal: null,
+      });
+    }
+  }
+}
+
+function asignarColorConvergencia() {
+  const conv = G.trayectorias.filter(tr => tr.conv);
+  const dists = conv.map(tr => {
+    const fin = tr.hist[tr.hist.length-1];
+    return Math.hypot(fin.m - G.m_star, fin.b - G.b_star);
+  });
+  const d_max = Math.max(...dists, 1e-9);
+  conv.forEach((tr, i) => {
+    tr.colorFinal = convColor(Math.min(dists[i] / d_max, 1));
+  });
+}
+
+function pasoSimulacion() {
+  for (const tr of G.trayectorias) {
+    if (tr.conv || tr.div) continue;
+    const {m, b} = tr.hist[tr.hist.length-1];
+    const {gm, gb} = calcGradiente(m, b);
+    const m_new = m - G.eta * gm;
+    const b_new = b - G.eta * gb;
+
+    if (!isFinite(m_new) || !isFinite(b_new) ||
+        Math.abs(m_new - G.m_star) > 3*(G.m_hi-G.m_lo) ||
+        Math.abs(b_new - G.b_star) > 3*(G.b_hi-G.b_lo)) {
+      tr.div = true;
+      continue;
+    }
+
+    tr.hist.push({m: m_new, b: b_new, J: calcJ_mb(m_new, b_new)});
+
+    if (Math.sqrt(gm*gm + gb*gb) < G.tolerancia) {
+      tr.conv = true;
+      tr.iterConv = G.paso;
+      asignarColorConvergencia();
+    }
+  }
+
+  const vals = G.trayectorias.map(tr => tr.hist[tr.hist.length-1].J);
+  const media = vals.reduce((a,v)=>a+v,0) / vals.length;
+  const desv  = Math.sqrt(vals.reduce((a,v)=>a+(v-media)**2,0) / vals.length);
+  G.histJ.push({iter: G.paso, media, desv});
+  G.paso++;
+
+  if (G.trayectorias.every(tr => tr.conv || tr.div)) {
+    G.estado = 'convergido'; actualizarEstadoControles();
+  } else if (G.paso >= G.maxIter) {
+    G.estado = 'limite'; actualizarEstadoControles();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -455,6 +531,7 @@ function dibujarPanel1() {
   dibujarGridP1(p);
   dibujarEjes(p, 0, 1, 0, 1, 5);
   dibujarRectaRegresion(p);
+  dibujarRectaFoco(p);
   dibujarPuntosP1(p);
 
   const nPts = G.puntos.length;
@@ -521,6 +598,50 @@ function dibujarPuntoOptimo_P2(panel) {
   ellipse(cx,cy,r*2.5,r*2.5);
 }
 
+function dibujarTrayectorias(panel) {
+  for (let i = 0; i < G.trayectorias.length; i++) {
+    const tr = G.trayectorias[i];
+    if (tr.hist.length < 2) continue;
+    const esFoco = (i === G.trajEnFoco);
+
+    let col;
+    if      (tr.div)  col = 'rgba(239,68,68,0.5)';
+    else if (tr.conv) col = tr.colorFinal;
+    else              col = esFoco ? '#fb923c' : 'rgba(255,255,255,0.55)';
+
+    stroke(col); strokeWeight(esFoco ? 3 : 1.5); noFill();
+
+    if (G.dejarRastro) {
+      beginShape();
+      for (const {m, b} of tr.hist) {
+        const {cx, cy} = p2c(panel, m, b);
+        vertex(cx, cy);
+      }
+      endShape();
+    } else if (tr.hist.length >= 2) {
+      const a = p2c(panel, tr.hist[tr.hist.length-2].m, tr.hist[tr.hist.length-2].b);
+      const z = p2c(panel, tr.hist[tr.hist.length-1].m, tr.hist[tr.hist.length-1].b);
+      line(a.cx, a.cy, z.cx, z.cy);
+    }
+
+    const fin = tr.hist[tr.hist.length-1];
+    const {cx, cy} = p2c(panel, fin.m, fin.b);
+    fill(col); noStroke();
+    ellipse(cx, cy, esFoco ? 8 : 5, esFoco ? 8 : 5);
+  }
+}
+
+function dibujarRectaFoco(panel) {
+  if (!G.trayectorias.length) return;
+  const tr = G.trayectorias[G.trajEnFoco];
+  if (!tr || !tr.hist.length) return;
+  const {m, b} = tr.hist[tr.hist.length-1];
+  const {cx:x0, cy:y0} = d2c(panel, 0, b);
+  const {cx:x1, cy:y1} = d2c(panel, 1, m+b);
+  stroke(251,146,60); strokeWeight(2);
+  line(x0, y0, x1, y1);
+}
+
 function dibujarPanel2() {
   dibujarPanel(paneles.P2, 'Espacio (m, b)', 17,17,17, 51,51,51);
   if (G.puntos.length >= 3) {
@@ -528,19 +649,57 @@ function dibujarPanel2() {
     dibujarHeatmap(paneles.P2);
   }
   dibujarEjes(paneles.P2, G.m_lo, G.m_hi, G.b_lo, G.b_hi, 5);
+  dibujarTrayectorias(paneles.P2);
   dibujarPuntoOptimo_P2(paneles.P2);
 }
 
 // ── Panel 3 ──────────────────────────────────────────────────
 
 function dibujarPanel3() {
-  dibujarPanel(paneles.P3, 'J(t)', 17,17,17, 51,51,51);
-  dibujarEjes(paneles.P3, 0, 1, 0, 1, 3);
-  if (G.histJ.length === 0) {
+  const panel = paneles.P3;
+  dibujarPanel(panel, 'J(t)', 17,17,17, 51,51,51);
+
+  if (G.histJ.length < 2) {
     noStroke(); fill(100,100,120); textSize(FS); textAlign(CENTER,CENTER);
-    const p=paneles.P3;
-    text('sin datos aún', p.ox+p.cw/2, p.oy+p.ch/2);
+    text('sin datos aún', panel.ox+panel.cw/2, panel.oy+panel.ch/2);
+    return;
   }
+
+  const { ox, oy, cw, ch } = panel;
+  const x0 = ox+PAD.l, y0 = oy+PAD.t;
+  const pw = cw-PAD.l-PAD.r, ph = ch-PAD.t-PAD.b;
+  const n  = G.histJ.length;
+
+  const jMin = G.J_star * 0.9;
+  const jMax = G.histJ[0].media * 1.1;
+  const toX  = i => x0 + (i / Math.max(n-1, 1)) * pw;
+  const toY  = j => y0 + (1 - constrain((j-jMin)/(jMax-jMin), 0, 1)) * ph;
+
+  dibujarEjes(panel, 0, n-1, jMin, jMax, 3);
+
+  // J* punteada amarilla
+  drawingContext.setLineDash([4, 4]);
+  stroke(251,191,36); strokeWeight(1);
+  line(x0, toY(G.J_star), x0+pw, toY(G.J_star));
+  drawingContext.setLineDash([]);
+
+  // Banda ±σ
+  noStroke(); fill(96,165,250, 40);
+  beginShape();
+  for (let i=0; i<n; i++) vertex(toX(i), toY(G.histJ[i].media + G.histJ[i].desv));
+  for (let i=n-1; i>=0; i--) vertex(toX(i), toY(G.histJ[i].media - G.histJ[i].desv));
+  endShape(CLOSE);
+
+  // Línea J_media
+  stroke(96,165,250); strokeWeight(2); noFill();
+  beginShape();
+  for (let i=0; i<n; i++) vertex(toX(i), toY(G.histJ[i].media));
+  endShape();
+
+  // Punto naranja en iteración actual
+  const last = G.histJ[n-1];
+  fill(251,146,60); noStroke();
+  ellipse(toX(n-1), toY(last.media), 7, 7);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -634,7 +793,17 @@ function crearControles() {
 
   // ── Acciones ─────────────────────────────────────────────
   const secAccion = mkSection('');
-  elBtnTrain = mkBtn('Train', 'btn-primary', () => { /* Etapa 3 */ });
+  elBtnTrain = mkBtn('Train', 'btn-primary', () => {
+    if (G.estado === 'animando') {
+      G.estado = 'detenido';
+      actualizarEstadoControles();
+      return;
+    }
+    if (G.puntos.length < 3) return;
+    inicializarTrayectorias();
+    G.estado = 'animando';
+    actualizarEstadoControles();
+  });
   elBtnReset = mkBtn('Reset', 'btn-danger',  () => { limpiarTrayectorias(); G.bufDirty = true; });
   secAccion.appendChild(elBtnTrain);
   secAccion.appendChild(elBtnReset);
@@ -750,9 +919,8 @@ function setup() {
 }
 
 function draw() {
-  // Fondo global
   background(15, 15, 19);
-
+  if (G.estado === 'animando') pasoSimulacion();
   dibujarPanel1();
   dibujarPanel2();
   dibujarPanel3();

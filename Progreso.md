@@ -10,9 +10,9 @@
 | Etapa | Nombre | Estado |
 |---|---|---|
 | **0** | Setup, layout, infraestructura | ✅ Completa |
-| **1** | Panel 1 interactivo | ⚠️ Casi completa (falta recta foco, Etapa 3) |
+| **1** | Panel 1 interactivo | ✅ Completa |
 | **2** | Panel 2: heatmap + campo vectorial | ⚠️ Parcial (falta campo ∇J, halo, labels ejes) |
-| **3** | Animación, trayectorias, Panel 3 | ❌ Pendiente |
+| **3** | Animación, trayectorias, Panel 3 | ✅ Completa |
 
 ---
 
@@ -72,28 +72,18 @@
 
 ---
 
-## Etapa 3 — Animación y Panel 3 ❌ Pendiente
+## Etapa 3 — Animación y Panel 3 ✅ Completa
 
-Todo pendiente. Puntos de entrada en el código:
-
-- Botón Train: `() => { /* Etapa 3 */ }` (línea ~475 del script)
-- `G.trayectorias = []`, `G.histJ = []`, `G.paso = 0` — campos listos en G
-- `G.estado`: maneja `'idle' | 'animando' | 'convergido' | 'limite' | 'detenido'`
-- `actualizarEstadoControles()` ya deshabilita/habilita controles según estado
-
-### Por implementar (plan §3)
-
-- [ ] `calcGradiente(m, b)` — gradiente analítico `∂J/∂m`, `∂J/∂b`
-- [ ] `inicializarTrayectorias()` — grilla uniforme sobre `m_rango × b_rango`
-- [ ] `pasoSimulacion()` — un paso GD por frame, criterio convergencia + divergencia
-- [ ] `asignarColorConvergencia(idx)` — colorización retroactiva HSL
-- [ ] `dibujarTrayectorias()` en Panel 2 (rastro completo o solo último segmento)
-- [ ] Recta naranja en Panel 1 (trayectoria `G.trajEnFoco`)
-- [ ] `dibujarPanel3()` con curva J_media(t), banda ±σ, línea J* punteada
-- [ ] `j2c()` correctamente escalado (actualmente stub)
-- [ ] Train/Stop/Reset conectados a `inicializarTrayectorias()` y `G.estado`
-- [ ] Detección de divergencia: clampeo a `3 × rango`, marcar `tr.div = true`
-- [ ] Parada automática cuando todas convergen o `paso >= maxIter`
+- `calcGradiente(m, b)` — gradiente analítico `∂J/∂m`, `∂J/∂b` ✅
+- `inicializarTrayectorias()` — grilla N×N con 5% margen interior ✅
+- `pasoSimulacion()` — un paso GD por frame, convergencia + divergencia ✅
+- `asignarColorConvergencia()` — colorización retroactiva HSL verde→rojo ✅
+- `dibujarTrayectorias(panel)` — rastro completo o solo último segmento ✅
+- `dibujarRectaFoco(panel)` — recta naranja en P1 (trayectoria `G.trajEnFoco`) ✅
+- `dibujarPanel3()` — curva J_media(t), banda ±σ, línea J* punteada, punto naranja ✅
+- Train/Stop conectados: Train reinicia, Stop pausa, Reset limpia ✅
+- Detección de divergencia: `|m - m*| > 3×rango` o valores no finitos ✅
+- Parada automática: todas conv/div → `'convergido'`; límite → `'limite'` ✅
 
 ---
 
