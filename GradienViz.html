@@ -174,6 +174,16 @@
     .btn-danger  { border-color: #7f1d1d; color: #fca5a5; }
     .btn-danger:hover  { background: #3d0a0a !important; }
 
+    .btn-group {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-group .btn {
+      flex: 1;
+      padding: 8px 0;
+      font-size: 12px;
+    }
+
     #sidebar-spacer { flex: 1; }
   </style>
 </head>
@@ -184,7 +194,7 @@
     <h1>GradienViz</h1>
     <span class="subtitle">— Descenso por gradiente · Regresión lineal</span>
   </div>
-  <span style="font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace">v2.0</span>
+  <span style="font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace">v2.1</span>
 </div>
 
 <div id="main">
@@ -193,6 +203,8 @@
 </div>
 
 <script>
+// GradienViz
+// UABCS - manc
 // ═══════════════════════════════════════════════════════════════
 // BLOQUE A — Constantes y paletas de color
 // ═══════════════════════════════════════════════════════════════
@@ -253,6 +265,9 @@ const G = {
   dejarRastro:    true,
   trajEnFoco:     0,
 
+  // NUEVO: control de velocidad (iteraciones por frame)
+  velocidad:      1,
+
   estado: 'idle',
   paso:   0,
 
@@ -265,6 +280,8 @@ const G = {
 
   puntoDrag:  null,
   puntoSelec: null,
+
+  condicion: null,
 };
 
 // Paneles calculados en setup/resize
@@ -342,6 +359,21 @@ function calcGradiente(m, b) {
   return { gm: 2*gm/n, gb: 2*gb/n };
 }
 
+function calcCondicion(puntos) {
+  if (puntos.length < 2) return null;
+  let Sx2 = 0, Sx = 0;
+  const n = puntos.length;
+  puntos.forEach(({x}) => { Sx2 += x*x; Sx += x; });
+  const a = Sx2, b = Sx, d = n;
+  const traza  = a + d;
+  const det    = a*d - b*b;
+  const disc   = Math.sqrt(Math.max(0, (traza/2)**2 - det));
+  const lambda1 = traza/2 + disc;
+  const lambda2 = traza/2 - disc;
+  if (Math.abs(lambda2) < 1e-12) return Infinity;
+  return lambda1 / lambda2;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // BLOQUE D — Lógica de estado
 // ═══════════════════════════════════════════════════════════════
@@ -350,6 +382,7 @@ function recalcularTodo() {
   const res = calcRegresion(G.puntos);
   if (!res) return;
   Object.assign(G, res, calcRango(res.m_star, res.b_star));
+  G.condicion = calcCondicion(G.puntos);
   G.bufDirty = true;
   limpiarTrayectorias();
 }
@@ -381,22 +414,32 @@ function inicializarTrayectorias() {
       });
     }
   }
+
+  G.dMaxColor = 0;
+  for (const tr of G.trayectorias) {
+    const d = Math.sqrt((tr.hist[0].m - G.m_star)**2 + (tr.hist[0].b - G.b_star)**2);
+    if (d > G.dMaxColor) G.dMaxColor = d;
+  }
+  G.dMaxColor = Math.max(G.dMaxColor, 0.001);
 }
 
-function asignarColorConvergencia() {
-  const conv = G.trayectorias.filter(tr => tr.conv);
-  const dists = conv.map(tr => {
-    const fin = tr.hist[tr.hist.length-1];
-    return Math.hypot(fin.m - G.m_star, fin.b - G.b_star);
-  });
-  const d_max = Math.max(...dists, 1e-9);
-  conv.forEach((tr, i) => {
-    tr.colorFinal = convColor(Math.min(dists[i] / d_max, 1));
-  });
+function asignarColorConvergencia(idx) {
+  const tr = G.trayectorias[idx];
+  const {m, b} = tr.hist[tr.hist.length - 1];
+  const d = Math.sqrt((m - G.m_star)**2 + (b - G.b_star)**2);
+  const t = Math.min(d / G.dMaxColor, 1);
+  tr.colorFinal = convColor(t);
 }
 
 function pasoSimulacion() {
-  for (const tr of G.trayectorias) {
+  if (G.paso >= G.maxIter) {
+    G.estado = 'limite';
+    actualizarEstadoControles();
+    return;
+  }
+
+  for (let i = 0; i < G.trayectorias.length; i++) {
+    const tr = G.trayectorias[i];
     if (tr.conv || tr.div) continue;
     const {m, b} = tr.hist[tr.hist.length-1];
     const {gm, gb} = calcGradiente(m, b);
@@ -415,7 +458,7 @@ function pasoSimulacion() {
     if (Math.sqrt(gm*gm + gb*gb) < G.tolerancia) {
       tr.conv = true;
       tr.iterConv = G.paso;
-      asignarColorConvergencia();
+      asignarColorConvergencia(i);
     }
   }
 
@@ -428,7 +471,36 @@ function pasoSimulacion() {
   if (G.trayectorias.every(tr => tr.conv || tr.div)) {
     G.estado = 'convergido'; actualizarEstadoControles();
   } else if (G.paso >= G.maxIter) {
-    G.estado = 'limite'; actualizarEstadoControles();
+    G.estado = 'limite';
+    for (const tr of G.trayectorias) {
+      if (!tr.conv && !tr.div) tr.colorFinal = 'rgba(180,180,180,0.7)';
+    }
+    actualizarEstadoControles();
+  }
+}
+
+// NUEVO: avanzar N pasos manualmente (desde idle o detenido)
+function avanzarPasos(n) {
+  if (G.puntos.length < 3) return;
+  // Si no hay trayectorias activas, inicializarlas
+  if (!G.trayectorias.length || G.estado === 'idle') {
+    inicializarTrayectorias();
+    G.estado = 'detenido';
+    actualizarEstadoControles();
+  }
+  // Si ya convergió o llegó al límite, permitir seguir viendo paso a paso
+  // (aunque no cambiará nada si todo convergió)
+  if (G.estado === 'convergido' || G.estado === 'limite') {
+    // resetear para poder seguir avanzando desde el mismo punto
+    // conservamos histJ y trayectorias pero reseteamos flags
+    G.trayectorias.forEach(tr => { tr.conv = false; tr.div = false; });
+    G.estado = 'detenido';
+    actualizarEstadoControles();
+  }
+
+  for (let i = 0; i < n; i++) {
+    pasoSimulacion();
+    if (G.estado === 'convergido' || G.estado === 'limite') break;
   }
 }
 
@@ -534,6 +606,21 @@ function dibujarPanel1() {
   dibujarRectaFoco(p);
   dibujarPuntosP1(p);
 
+  // Coordenadas en esquina superior derecha del padding del título
+  noStroke(); fill(122,122,154);
+  textFont('IBM Plex Mono, monospace');
+  textSize(FS - 1);
+  textAlign(RIGHT, CENTER);
+  if (G.puntoDrag !== null) {
+    const {x, y} = G.puntos[G.puntoDrag];
+    text('x=' + x.toFixed(3) + '  y=' + y.toFixed(3),
+      p.ox + p.cw - PAD.r, p.oy + PAD.t / 2);
+  } else if (dentroDePanel(p, mouseX, mouseY)) {
+    const {xd, yd} = canvasToData(mouseX, mouseY, p);
+    text('x=' + xd.toFixed(3) + '  y=' + yd.toFixed(3),
+      p.ox + p.cw - PAD.r, p.oy + PAD.t / 2);
+  }
+
   const nPts = G.puntos.length;
   noStroke(); fill(110,110,130);
   textFont('IBM Plex Mono, monospace');
@@ -550,6 +637,30 @@ function dibujarPanel1() {
       `m* = ${G.m_star.toFixed(3)}    b* = ${G.b_star.toFixed(3)}`,
       p.ox + PAD.l, p.oy + p.ch - 4
     );
+    if (G.condicion !== null) {
+      const k = G.condicion;
+      let kStr;
+      if (k === Infinity || k > 1e6) {
+        const exp  = Math.floor(Math.log10(k));
+        const mant = k / Math.pow(10, exp);
+        const sup  = String(exp).split('').map(c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[+c]).join('');
+        kStr = `κ = ${mant.toFixed(1)}×10${sup}  ⚠ mal condicionado`;
+        fill(249,115,22);
+      } else if (k > 1000) {
+        kStr = `κ = ${k.toFixed(1)}  ⚠ mal condicionado`;
+        fill(249,115,22);
+      } else if (k > 100) {
+        kStr = `κ = ${k.toFixed(1)}`;
+        fill(251,191,36);
+      } else {
+        kStr = `κ = ${k.toFixed(1)}`;
+        fill(122,122,154);
+      }
+      noStroke();
+      textSize(FS - 1);
+      textAlign(RIGHT, TOP);
+      text(kStr, p.ox + p.cw - PAD.r, p.oy + PAD.t + 4);
+    }
   }
 }
 
@@ -643,14 +754,30 @@ function dibujarRectaFoco(panel) {
 }
 
 function dibujarPanel2() {
-  dibujarPanel(paneles.P2, 'Espacio (m, b)', 17,17,17, 51,51,51);
+  const p2 = paneles.P2;
+  dibujarPanel(p2, 'Espacio (m, b)', 17,17,17, 51,51,51);
   if (G.puntos.length >= 3) {
     if (G.bufDirty || !G.bufHeatmap) construirHeatmap();
-    dibujarHeatmap(paneles.P2);
+    dibujarHeatmap(p2);
   }
-  dibujarEjes(paneles.P2, G.m_lo, G.m_hi, G.b_lo, G.b_hi, 5);
-  dibujarTrayectorias(paneles.P2);
-  dibujarPuntoOptimo_P2(paneles.P2);
+  dibujarEjes(p2, G.m_lo, G.m_hi, G.b_lo, G.b_hi, 5);
+  dibujarTrayectorias(p2);
+  dibujarPuntoOptimo_P2(p2);
+
+  // Indicador de estado en el footer
+  let estadoTexto = null;
+  let estadoR, estadoG, estadoB;
+  if      (G.estado === 'animando')   { estadoTexto = 'Entrenando…';                          estadoR=96;  estadoG=165; estadoB=250; }
+  else if (G.estado === 'convergido') { estadoTexto = 'Convergido ✓';                         estadoR=34;  estadoG=197; estadoB=94;  }
+  else if (G.estado === 'limite')     { estadoTexto = `Límite ${G.maxIter} iters — no convergió`; estadoR=249; estadoG=115; estadoB=22;  }
+  else if (G.estado === 'detenido')   { estadoTexto = 'Detenido';                             estadoR=122; estadoG=122; estadoB=154; }
+  if (estadoTexto) {
+    noStroke(); fill(estadoR, estadoG, estadoB);
+    textFont('IBM Plex Mono, monospace');
+    textSize(FS);
+    textAlign(LEFT, BOTTOM);
+    text(estadoTexto, p2.ox + PAD.l, p2.oy + p2.ch - 6);
+  }
 }
 
 // ── Panel 3 ──────────────────────────────────────────────────
@@ -708,11 +835,13 @@ function dibujarPanel3() {
 
 const RES_VALUES  = [6, 8, 10, 12, 16];
 const TRAY_VALUES = [3, 4, 5, 6];
+const SPEED_VALUES = [1, 2, 5, 10, 20, 50, 100]; // NUEVO
 
 let elBtnTrain, elBtnReset, elBtnPuntos;
-let elSliderRes, elSliderTray, elSliderEta;
+let elBtnStep1, elBtnStep10, elBtnStep50; // NUEVO
+let elSliderRes, elSliderTray, elSliderEta, elSliderSpeed; // NUEVO speed
 let elCheckRastro, elInputFoco;
-let elValRes, elValTray, elValEta;
+let elValRes, elValTray, elValEta, elValSpeed; // NUEVO speed
 
 function crearControles() {
   const sb = document.getElementById('sidebar');
@@ -786,6 +915,15 @@ function crearControles() {
 
   sb.appendChild(secVis);
 
+  // NUEVO: ── Velocidad ────────────────────────────────────
+  const secVel = mkSection('Velocidad');
+  [elSliderSpeed, elValSpeed] = mkSlider(
+    secVel, 'Speed', 0, SPEED_VALUES.length-1, SPEED_VALUES.indexOf(G.velocidad),
+    v => { G.velocidad = SPEED_VALUES[v]; return G.velocidad + '×'; }
+  );
+  // El slider de velocidad NUNCA se deshabilita (se puede cambiar en caliente)
+  sb.appendChild(secVel);
+
   // ── Spacer ────────────────────────────────────────────────
   const spacer = document.createElement('div');
   spacer.id = 'sidebar-spacer';
@@ -793,6 +931,7 @@ function crearControles() {
 
   // ── Acciones ─────────────────────────────────────────────
   const secAccion = mkSection('');
+
   elBtnTrain = mkBtn('Train', 'btn-primary', () => {
     if (G.estado === 'animando') {
       G.estado = 'detenido';
@@ -804,8 +943,21 @@ function crearControles() {
     G.estado = 'animando';
     actualizarEstadoControles();
   });
+
+  // NUEVO: botones de paso discreto
+  const rowSteps = document.createElement('div');
+  rowSteps.className = 'btn-group';
+  elBtnStep1  = mkBtn('+1',  '', () => avanzarPasos(1));
+  elBtnStep10 = mkBtn('+10', '', () => avanzarPasos(10));
+  elBtnStep50 = mkBtn('+50', '', () => avanzarPasos(50));
+  rowSteps.appendChild(elBtnStep1);
+  rowSteps.appendChild(elBtnStep10);
+  rowSteps.appendChild(elBtnStep50);
+
   elBtnReset = mkBtn('Reset', 'btn-danger',  () => { limpiarTrayectorias(); G.bufDirty = true; });
+
   secAccion.appendChild(elBtnTrain);
+  secAccion.appendChild(rowSteps);
   secAccion.appendChild(elBtnReset);
   sb.appendChild(secAccion);
 
@@ -819,6 +971,12 @@ function actualizarEstadoControles() {
   elSliderRes.disabled  = anim;
   elSliderTray.disabled = anim;
   elSliderEta.disabled  = anim;
+  // NUEVO: speed siempre habilitado; step buttons habilitados cuando NO animando
+  const puedeStep = !anim;
+  elBtnStep1.disabled  = !puedeStep;
+  elBtnStep10.disabled = !puedeStep;
+  elBtnStep50.disabled = !puedeStep;
+
   elBtnTrain.textContent = anim ? 'Stop' : 'Train';
   elBtnTrain.className   = 'btn ' + (anim ? 'btn-danger' : 'btn-primary');
   elBtnReset.disabled    = G.estado === 'idle';
@@ -863,6 +1021,7 @@ function mkSlider(parent, label, min, max, val, onChange) {
     if (label === 'Heatmap res')   return G.resHeatmap;
     if (label === 'Trayectorias')  return G.numTrayPorLado;
     if (label === 'η (lr)')        return G.eta.toFixed(3);
+    if (label === 'Speed')         return G.velocidad + '×';
     return val;
   })();
   lbl.appendChild(span);
@@ -920,7 +1079,13 @@ function setup() {
 
 function draw() {
   background(15, 15, 19);
-  if (G.estado === 'animando') pasoSimulacion();
+  if (G.estado === 'animando') {
+    // NUEVO: respetar velocidad (iteraciones por frame)
+    for (let i = 0; i < G.velocidad; i++) {
+      pasoSimulacion();
+      if (G.estado !== 'animando') break;
+    }
+  }
   dibujarPanel1();
   dibujarPanel2();
   dibujarPanel3();
