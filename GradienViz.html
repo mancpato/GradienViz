@@ -203,12 +203,23 @@
 </div>
 
 <script>
-// GradienViz
-// UABCS - manc
-// ═══════════════════════════════════════════════════════════════
-// BLOQUE A — Constantes y paletas de color
-// ═══════════════════════════════════════════════════════════════
+/* GradienViz
 
+ * Este página ilustra el descenso por gradiente en un problema de 
+ * regresión lineal simple. Pretende simular la manera como una red
+ * neuronal aprende a ajustar sus parámetros (pesos y bias) pero
+ * sirve para aclarar que aquí son sólo dos parámetros: pendiente y ordenada
+ * al origen, mientras que en una red neuronal hay muchos más y se organizan 
+ * en capas. Por ejemplo, una red simple 2->4->1 tiene 9 parámetros (8 pesos 
+ * y 1 bias) en la primera capa y 5 en la de salida (4 pesos y 1 bias).
+ * 
+ * Para más detalles, consultar GradienVizMate.tex en el repositorio.
+ *
+ * UABCS - manc
+ * Desarrollado con ayuda de Claude (Antropic).
+ */ 
+
+ // BLOQUE A — Constantes y paletas de color
 const VIRIDIS = [
   [68,  1, 84],
   [72, 40,120],
@@ -295,33 +306,50 @@ const paneles = {
 // BLOQUE C — Matemáticas puras
 // ═══════════════════════════════════════════════════════════════
 
-function calcRegresion(puntos) {
+function calcRegresion(puntos) 
+{
   const n = puntos.length;
-  if (n < 3) return null;
+  if (n < 3) 
+    return null;
   let sx=0, sy=0, sxy=0, sx2=0;
-  for (const p of puntos) { sx+=p.x; sy+=p.y; sxy+=p.x*p.y; sx2+=p.x*p.x; }
+  for (const p of puntos) { 
+    sx+=p.x; 
+    sy+=p.y; 
+    sxy+=p.x*p.y; 
+    sx2+=p.x*p.x; 
+  }
   const denom = n*sx2 - sx*sx;
-  if (Math.abs(denom) < 1e-12) return null;
+  if (Math.abs(denom) < 1e-12) 
+    return null;
   const m = (n*sxy - sx*sy) / denom;
   const b = (sy - m*sx) / n;
   let J = 0;
-  for (const p of puntos) { const e = p.y - (m*p.x+b); J+=e*e; }
+  for (const p of puntos) { 
+    const e = p.y - (m*p.x+b); 
+    J+=e*e; 
+  }
   return { m_star: m, b_star: b, J_star: J/n };
 }
 
-function calcRango(m_star, b_star) {
+function calcRango(m_star, b_star) 
+{
   const dm = Math.max(0.8, Math.abs(m_star) * 0.6);
   const db = Math.max(0.6, Math.abs(b_star) * 0.6);
   return { m_lo: m_star-dm, m_hi: m_star+dm, b_lo: b_star-db, b_hi: b_star+db };
 }
 
-function calcJ_mb(m, b) {
+function calcJ_mb(m, b) 
+{
   let J = 0;
-  for (const p of G.puntos) { const e = p.y-(m*p.x+b); J+=e*e; }
+  for (const p of G.puntos) { 
+    const e = p.y-(m*p.x+b); 
+    J+=e*e; 
+  }
   return G.puntos.length ? J/G.puntos.length : 0;
 }
 
-function dentroDePanel(panel, x, y) {
+function dentroDePanel(panel, x, y) 
+{
   return x >= panel.ox && x <= panel.ox + panel.cw &&
          y >= panel.oy && y <= panel.oy + panel.ch;
 }
@@ -329,7 +357,8 @@ function dentroDePanel(panel, x, y) {
 // ─── Funciones de mapeo ──────────────────────────────────────
 
 // Panel 1: datos [0,1]² → canvas pixels
-function d2c(panel, xd, yd) {
+function d2c(panel, xd, yd) 
+{
   const { ox, oy, cw, ch } = panel;
   return {
     cx: ox + PAD.l + xd * (cw - PAD.l - PAD.r),
@@ -348,7 +377,8 @@ function p2c(panel, m, b) {
   };
 }
 
-function calcGradiente(m, b) {
+function calcGradiente(m, b) 
+{
   const n = G.puntos.length;
   let gm = 0, gb = 0;
   for (const p of G.puntos) {
@@ -359,8 +389,10 @@ function calcGradiente(m, b) {
   return { gm: 2*gm/n, gb: 2*gb/n };
 }
 
-function calcCondicion(puntos) {
-  if (puntos.length < 2) return null;
+function calcCondicion(puntos) 
+{
+  if (puntos.length < 2) 
+    return null;
   let Sx2 = 0, Sx = 0;
   const n = puntos.length;
   puntos.forEach(({x}) => { Sx2 += x*x; Sx += x; });
@@ -370,7 +402,8 @@ function calcCondicion(puntos) {
   const disc   = Math.sqrt(Math.max(0, (traza/2)**2 - det));
   const lambda1 = traza/2 + disc;
   const lambda2 = traza/2 - disc;
-  if (Math.abs(lambda2) < 1e-12) return Infinity;
+  if (Math.abs(lambda2) < 1e-12) 
+    return Infinity;
   return lambda1 / lambda2;
 }
 

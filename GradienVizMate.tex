@@ -1,0 +1,565 @@
+\documentclass[12pt, a4paper]{article}
+
+% ── Paquetes ────────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish, mexico]{babel}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+% ── Geometría ───────────────────────────────────────────────────────────────
+\geometry{
+  top    = 2.5cm,
+  bottom = 2.5cm,
+  left   = 3.0cm,
+  right  = 3.0cm
+}
+
+% ── Colores ─────────────────────────────────────────────────────────────────
+\definecolor{azulviz}{RGB}{37, 99, 235}
+\definecolor{naranjviz}{RGB}{251, 146, 60}
+\definecolor{verdviz}{RGB}{52, 211, 153}
+\definecolor{amarillviz}{RGB}{251, 191, 36}
+\definecolor{fondocaja}{RGB}{240, 245, 255}
+\definecolor{bordecruz}{RGB}{37, 99, 235}
+\definecolor{fondoadv}{RGB}{255, 248, 230}
+\definecolor{bordeadv}{RGB}{251, 146, 60}
+\definecolor{fondoteo}{RGB}{235, 250, 242}
+\definecolor{bordeteo}{RGB}{52, 153, 110}
+
+% ── Entornos ─────────────────────────────────────────────────────────────────
+\mdfdefinestyle{vizverde}{
+  backgroundcolor = fondoteo,
+  linecolor       = bordeteo,
+  linewidth       = 1.5pt,
+  leftmargin      = 0pt,
+  rightmargin     = 0pt,
+  innertopmargin  = 8pt,
+  innerbottommargin = 8pt,
+  innerleftmargin = 12pt,
+  innerrightmargin= 12pt,
+  roundcorner     = 4pt
+}
+
+\mdfdefinestyle{viznaranja}{
+  backgroundcolor = fondoadv,
+  linecolor       = bordeadv,
+  linewidth       = 1.5pt,
+  leftmargin      = 0pt,
+  rightmargin     = 0pt,
+  innertopmargin  = 8pt,
+  innerbottommargin = 8pt,
+  innerleftmargin = 12pt,
+  innerrightmargin= 12pt,
+  roundcorner     = 4pt
+}
+
+\mdfdefinestyle{vizazul}{
+  backgroundcolor = fondocaja,
+  linecolor       = bordecruz,
+  linewidth       = 1.5pt,
+  leftmargin      = 0pt,
+  rightmargin     = 0pt,
+  innertopmargin  = 8pt,
+  innerbottommargin = 8pt,
+  innerleftmargin = 12pt,
+  innerrightmargin= 12pt,
+  roundcorner     = 4pt
+}
+
+\newenvironment{viznota}[1]{%
+  \begin{mdframed}[style=vizverde]
+  \textbf{\color{bordeteo}En GradienViz \textemdash\ #1.}\quad
+}{%
+  \end{mdframed}
+}
+
+\newenvironment{vizadv}{%
+  \begin{mdframed}[style=viznaranja]
+  \textbf{\color{bordeadv}Atención:}\quad
+}{%
+  \end{mdframed}
+}
+
+\newenvironment{vizdef}{%
+  \begin{mdframed}[style=vizazul]
+}{%
+  \end{mdframed}
+}
+
+% ── Comandos matemáticos ─────────────────────────────────────────────────────
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\grad}{\nabla}
+\newcommand{\mstar}{m^{*}}
+\newcommand{\bstar}{b^{*}}
+\newcommand{\Jfun}{J(m,b)}
+\newcommand{\XtX}{\mathbf{X}^{\top}\mathbf{X}}
+\newcommand{\T}{{\top}}
+
+% ── Hyperref ─────────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks = true,
+  linkcolor  = azulviz,
+  urlcolor   = azulviz,
+  citecolor  = azulviz
+}
+
+% ── Metadatos ────────────────────────────────────────────────────────────────
+\title{
+  {\Large\bfseries Descenso por gradiente en regresión lineal}\\[0.4em]
+  {\large Del visualizador a la red neuronal}\\[0.8em]
+  {\normalsize Notas de lectura para \textit{GradienViz}}
+}
+\author{
+  Departamento Académico de Sistemas Computacionales\\
+  Universidad Autónoma de Baja California Sur
+}
+\date{2026}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+\maketitle
+\tableofcontents
+\vspace{1em}
+
+\begin{vizadv}
+  Este documento asume familiaridad con cálculo diferencial multivariable,
+  álgebra lineal elemental y la fórmula de regresión lineal simple.
+  Se recomienda tener abierto \textbf{GradienViz} mientras se lee.
+\end{vizadv}
+
+% =============================================================================
+\section{Punto de partida: lo que ya viste}
+% =============================================================================
+
+Cuando abres GradienViz y colocas algunos puntos en el Panel~1, la herramienta
+calcula automáticamente dos números: la pendiente~$\mstar$ y el intercepto~$\bstar$
+de la recta que mejor se ajusta a esos datos, y los marca con una cruz amarilla~$\oplus$
+en el Panel~2.
+
+Esos dos números son la solución al siguiente problema:
+
+\begin{vizdef}
+\textbf{Problema de regresión lineal simple.} Dados $n$ pares de observaciones
+$(x_i, y_i)$ con $i = 1, \ldots, n$, encontrar los valores $m, b \in \R$ que
+minimizan el error cuadrático medio:
+\begin{equation}\label{eq:J}
+  \Jfun = \frac{1}{n}\sum_{i=1}^{n}\bigl(m x_i + b - y_i\bigr)^2.
+\end{equation}
+\end{vizdef}
+
+Ya conoces la solución analítica. Definiendo las sumas
+\[
+  S_x = \sum x_i, \quad
+  S_y = \sum y_i, \quad
+  S_{xy} = \sum x_i y_i, \quad
+  S_{x^2} = \sum x_i^2,
+\]
+se obtiene directamente:
+\begin{equation}\label{eq:exacta}
+  \mstar = \frac{n S_{xy} - S_x S_y}{n S_{x^2} - S_x^2},
+  \qquad
+  \bstar = \frac{S_y - \mstar S_x}{n}.
+\end{equation}
+
+La pregunta natural es: \textbf{si ya existe esta fórmula, ¿para qué simular
+un algoritmo?} La respuesta a esa pregunta es el núcleo de este documento
+y la justificación completa del descenso por gradiente como método general
+de optimización en aprendizaje automático.
+
+\begin{viznota}{Panel~1}
+La recta gris punteada que siempre aparece es $y = \mstar x + \bstar$,
+calculada con \eqref{eq:exacta}. La recta naranja, durante la animación,
+corresponde a una estimación provisional que el algoritmo va corrigiendo
+paso a paso. Al converger, ambas rectas coinciden.
+\end{viznota}
+
+% =============================================================================
+\section{La función de costo como superficie}
+% =============================================================================
+
+La expresión~\eqref{eq:J} define una función $J: \R^2 \to \R$.
+Para un conjunto de datos fijo, cada par $(m, b)$ produce un valor de costo~$J$.
+Si graficamos este valor sobre el plano $(m, b)$, obtenemos una superficie.
+
+Expandiendo el cuadrado en~\eqref{eq:J}:
+\begin{align}
+  \Jfun &= \frac{1}{n}\sum_{i=1}^{n}
+    \bigl(m^2 x_i^2 + 2mb x_i - 2m x_i y_i + b^2 - 2b y_i + y_i^2\bigr) \notag\\
+  &= \frac{S_{x^2}}{n}\,m^2 + \frac{2S_x}{n}\,mb + b^2
+     - \frac{2S_{xy}}{n}\,m - \frac{2S_y}{n}\,b + \frac{S_{y^2}}{n}.
+  \label{eq:Jexpandida}
+\end{align}
+
+Esta expresión es un \textbf{polinomio de grado~2} en $m$ y $b$, con
+todos los términos de grado par o cruzados. En términos matriciales,
+si se define el vector de parámetros $\boldsymbol{\theta} = (m, b)^\T$,
+la función se puede escribir como
+\begin{equation}\label{eq:Jmatrix}
+  J(\boldsymbol{\theta}) = \frac{1}{n}
+  \bigl(\mathbf{X}\boldsymbol{\theta} - \mathbf{y}\bigr)^\T
+  \bigl(\mathbf{X}\boldsymbol{\theta} - \mathbf{y}\bigr),
+\end{equation}
+donde $\mathbf{X} \in \R^{n\times 2}$ es la \emph{matriz de diseño}:
+\[
+  \mathbf{X} = \begin{pmatrix} x_1 & 1 \\ x_2 & 1 \\ \vdots & \vdots \\ x_n & 1 \end{pmatrix},
+  \qquad
+  \mathbf{y} = \begin{pmatrix} y_1 \\ y_2 \\ \vdots \\ y_n \end{pmatrix}.
+\]
+
+\subsection{Convexidad}
+
+La función~\eqref{eq:Jmatrix} es \textbf{convexa}: su Hessiana
+\begin{equation}\label{eq:hessiana}
+  H = \nabla^2 J = \frac{2}{n}\XtX
+\end{equation}
+es semidefinida positiva para cualquier $\mathbf{X}$ (pues $\mathbf{v}^\T \XtX \mathbf{v}
+= \norm{\mathbf{X}\mathbf{v}}^2 \geq 0$ para todo $\mathbf{v}$).
+Cuando los puntos no son colineales verticalmente, $H$ es \emph{definida} positiva,
+lo que garantiza que $J$ tiene un único mínimo global: la solución
+$(\mstar, \bstar)$.
+
+Esta propiedad tiene una consecuencia visual directa.
+
+\begin{viznota}{Panel~2, mapa de calor}
+El colormap viridis que se muestra es la función $\Jfun$: azul oscuro cerca
+del mínimo, amarillo lejos de él. Que el mapa forme siempre un único
+\emph{valle} sin mesetas ni mínimos secundarios es la expresión visual
+de la convexidad de~$J$.
+\end{viznota}
+
+% =============================================================================
+\section{El gradiente: las flechas del Panel~2}
+% =============================================================================
+
+Para minimizar $J$, necesitamos saber en qué dirección decrece más rápidamente
+en cada punto del plano $(m, b)$. Esa información la proporciona el gradiente.
+
+Derivando \eqref{eq:Jexpandida} con respecto a cada parámetro:
+\begin{align}
+  \frac{\partial J}{\partial m} &=
+    \frac{2}{n}\sum_{i=1}^{n}(m x_i + b - y_i)\,x_i,
+  \label{eq:gm}\\[4pt]
+  \frac{\partial J}{\partial b} &=
+    \frac{2}{n}\sum_{i=1}^{n}(m x_i + b - y_i).
+  \label{eq:gb}
+\end{align}
+
+El vector gradiente en el punto $(m, b)$ es:
+\[
+  \grad J(m, b) =
+  \begin{pmatrix} \partial J/\partial m \\ \partial J/\partial b \end{pmatrix} \in \R^2.
+\]
+
+El gradiente tiene dos propiedades geométricas fundamentales:
+\begin{enumerate}[label=(\roman*)]
+  \item Apunta en la dirección de \textbf{mayor crecimiento} de $J$.
+  \item Es \textbf{perpendicular} a las curvas de nivel de $J$.
+\end{enumerate}
+
+Por lo tanto, $-\grad J(m,b)$ apunta en la dirección de mayor \emph{descenso}.
+
+\begin{viznota}{Panel~2, campo vectorial}
+Cada flecha pequeña del campo es el vector $-\grad J$ en ese punto de la cuadrícula,
+normalizado para que su longitud sea proporcional a $\norm{\grad J}$.
+Las flechas apuntan siempre hacia el mínimo, convergiendo en~$\oplus$.
+Cerca del óptimo las flechas se acortan: el gradiente tiende a cero conforme
+$\boldsymbol{\theta} \to (\mstar, \bstar)$.
+\end{viznota}
+
+% =============================================================================
+\section{El algoritmo de descenso por gradiente}
+% =============================================================================
+
+La idea del descenso por gradiente es simple: desde un punto inicial arbitrario
+$\boldsymbol{\theta}^{(0)} = (m_0, b_0)$, moverse en la dirección del gradiente
+negativo con un paso de tamaño controlado.
+
+\begin{vizdef}
+\textbf{Iteración de descenso por gradiente.} Dado $\boldsymbol{\theta}^{(t)} = (m^{(t)}, b^{(t)})$,
+calcular:
+\begin{equation}\label{eq:update}
+  \boldsymbol{\theta}^{(t+1)} = \boldsymbol{\theta}^{(t)} - \eta\,\grad J\!\left(\boldsymbol{\theta}^{(t)}\right),
+\end{equation}
+o explícitamente:
+\begin{align*}
+  m^{(t+1)} &= m^{(t)} - \eta\,\frac{\partial J}{\partial m}\biggr|_{(m^{(t)},\,b^{(t)})}, \\[4pt]
+  b^{(t+1)} &= b^{(t)} - \eta\,\frac{\partial J}{\partial b}\biggr|_{(m^{(t)},\,b^{(t)})}.
+\end{align*}
+La constante $\eta > 0$ se llama \textbf{tasa de aprendizaje} (\emph{learning rate}).
+\end{vizdef}
+
+\subsection{El rol de la tasa de aprendizaje \texorpdfstring{$\eta$}{eta}}
+
+La tasa de aprendizaje $\eta$ controla el tamaño de cada paso y determina
+el comportamiento del algoritmo:
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  Régimen & Comportamiento & Causa \\
+  \midrule
+  $\eta$ muy pequeño & Convergencia lenta pero segura & Pasos insuficientes \\
+  $\eta$ moderado    & Convergencia suave hacia $(\mstar,\bstar)$ & Equilibrio \\
+  $\eta$ grande      & Oscilaciones o divergencia & El paso supera el mínimo \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Para una función cuadrática como~\eqref{eq:Jexpandida}, puede demostrarse que
+la condición suficiente de convergencia es:
+\begin{equation}\label{eq:condeta}
+  \eta < \frac{2}{\lambda_{\max}(H)} = \frac{n}{\lambda_{\max}(\XtX)},
+\end{equation}
+donde $\lambda_{\max}$ denota el eigenvalor máximo de la Hessiana.
+Cuando $\eta$ supera este umbral, la iteración diverge.
+
+\begin{viznota}{slider $\eta$}
+El rango $[0.001, 0.5]$ en escala logarítmica permite explorar
+los tres regímenes. Con datos bien distribuidos en $x$, el umbral
+de divergencia suele estar alrededor de $\eta \approx 0.3$\textendash$0.4$.
+Con datos mal condicionados, ese umbral puede ser mucho menor.
+\end{viznota}
+
+\subsection{Criterio de convergencia}
+
+Se dice que una trayectoria converge cuando el gradiente se vuelve
+suficientemente pequeño:
+\[
+  \norm{\grad J\!\left(\boldsymbol{\theta}^{(t)}\right)} < \varepsilon,
+\]
+con $\varepsilon = 10^{-4}$ en GradienViz. Este criterio es más robusto que
+verificar el cambio en $J$, pues detecta correctamente los puntos estacionarios
+incluso en superficies muy planas.
+
+% =============================================================================
+\section{Una simulación ilustrativa}
+% =============================================================================
+
+En este punto es necesario ser explícito sobre el carácter del ejercicio:
+
+\begin{vizadv}
+  En regresión lineal, el descenso por gradiente es \textbf{innecesario
+  desde el punto de vista computacional}: la solución exacta~\eqref{eq:exacta}
+  se calcula en tiempo $O(n)$ con aritmética flotante estándar.
+  GradienViz es una herramienta de \textbf{visualización pedagógica}, no
+  un método de cálculo. Su propósito es hacer visible el comportamiento
+  del algoritmo en un caso donde la respuesta correcta se conoce y puede
+  usarse como referencia (la cruz~$\oplus$).
+\end{vizadv}
+
+Esto tiene una consecuencia importante: el visualizador permite verificar
+directamente si el algoritmo llegó al lugar correcto, comparando la posición
+final de cada trayectoria con $(\mstar, \bstar)$. En el caso real\textemdash
+una red neuronal con miles de parámetros\textemdash esa verificación directa
+no es posible.
+
+% =============================================================================
+\section{Condicionamiento numérico}
+% =============================================================================
+
+\subsection{La matriz \texorpdfstring{$\XtX$}{X'X} y su geometría}
+
+La Hessiana~\eqref{eq:hessiana} es proporcional a $\XtX$, una matriz $2\times 2$
+simétrica y semidefinida positiva. Sus eigenvalores $\lambda_1 \geq \lambda_2 \geq 0$
+determinan la forma geométrica del bowl de~$J$:
+
+\begin{itemize}
+  \item Si $\lambda_1 \approx \lambda_2$: el bowl es casi circular, el gradiente
+    apunta casi directamente al mínimo, y el descenso converge en pocas iteraciones.
+  \item Si $\lambda_1 \gg \lambda_2$: el bowl es un elipsoide muy elongado.
+    El gradiente apunta oblicuamente al mínimo, y el descenso toma un camino
+    en zigzag que puede requerir miles de iteraciones.
+\end{itemize}
+
+\subsection{El número de condición}
+
+La relación entre los eigenvalores extremos define el \textbf{número de condición}:
+\begin{equation}\label{eq:kappa}
+  \kappa(\XtX) = \frac{\lambda_1}{\lambda_2}.
+\end{equation}
+
+Para la matriz $2\times 2$
+\[
+  \XtX = \begin{pmatrix} S_{x^2} & S_x \\ S_x & n \end{pmatrix},
+\]
+los eigenvalores se calculan analíticamente:
+\begin{align*}
+  \text{tr} &= S_{x^2} + n, \\
+  \det &= n\,S_{x^2} - S_x^2, \\
+  \lambda_{1,2} &= \frac{\text{tr}}{2} \pm
+    \sqrt{\left(\frac{\text{tr}}{2}\right)^2 - \det}.
+\end{align*}
+
+Un $\kappa$ grande indica que el problema está \emph{mal condicionado}:
+pequeños cambios en los datos pueden producir grandes cambios en la solución,
+y el algoritmo de descenso por gradiente converge lentamente.
+
+\begin{viznota}{Panel~1, esquina superior derecha}
+El valor $\kappa(\XtX)$ se actualiza cada vez que se modifica un punto.
+Los colores indican el régimen: gris ($\kappa \leq 100$), amarillo ($\kappa \leq 1000$),
+naranja ($\kappa > 1000$). Los casos con puntos agrupados en torno a un mismo
+valor de~$x$ producen $\kappa$ extremadamente alto y trayectorias que no convergen
+dentro del límite de 2000 iteraciones.
+\end{viznota}
+
+\subsection{¿Por qué los puntos verticales degradan el condicionamiento?}
+
+Si todas las $x_i$ son iguales (digamos $x_i = c$), entonces:
+\[
+  \XtX = \begin{pmatrix} nc^2 & nc \\ nc & n \end{pmatrix}
+       = n \begin{pmatrix} c^2 & c \\ c & 1 \end{pmatrix},
+\]
+cuyo determinante es $n(c^2 - c^2) = 0$. La matriz es singular: $\lambda_2 = 0$
+y $\kappa = \infty$. Geométricamente, los datos no permiten determinar la pendiente
+$m$ de ninguna recta\textemdash cualquier recta vertical pasa por todos los puntos.
+Conforme los datos se aproximan a esta configuración, $\kappa$ crece sin límite.
+
+% =============================================================================
+\section{De la recta a la red neuronal}
+% =============================================================================
+
+Hemos establecido que, para regresión lineal simple, el descenso por gradiente
+es un algoritmo funcionalmente redundante: la fórmula~\eqref{eq:exacta}
+lo supera en todo sentido. ¿Por qué, entonces, el descenso por gradiente
+es el algoritmo central del aprendizaje profundo?
+
+\subsection{Escala: cuando la fórmula exacta deja de ser práctica}
+
+La solución analítica para regresión lineal múltiple con $p$ predictores es:
+\begin{equation}\label{eq:lsmulti}
+  \boldsymbol{\theta}^* = (\mathbf{X}^\T \mathbf{X})^{-1}\mathbf{X}^\T \mathbf{y}.
+\end{equation}
+
+Calcular esta expresión requiere invertir una matriz $p \times p$.
+Con $p = 2$ (como en GradienViz) esto es trivial.
+Pero en un modelo de lenguaje grande, $p$ puede superar los $10^{11}$ parámetros.
+Almacenar y factorizar una matriz de $10^{11} \times 10^{11}$ es computacionalmente
+imposible con cualquier hardware concebible.
+
+\subsection{No-convexidad: cuando la fórmula exacta no existe}
+
+La razón más profunda es que los modelos no lineales, en particular las redes
+neuronales, no tienen una función de costo cuadrática.
+
+Considera una red neuronal simple con arquitectura $2 \to 4 \to 1$:
+dos entradas, una capa oculta de cuatro neuronas con función de activación
+no lineal $\sigma$ (por ejemplo, ReLU o sigmoide), y una salida escalar.
+El número total de parámetros es:
+\[
+  (2 \times 4) + 4 + (4 \times 1) + 1 = 8 + 4 + 4 + 1 = 17.
+\]
+
+La salida de esta red para una entrada $\mathbf{x} \in \R^2$ es:
+\[
+  \hat{y}(\mathbf{x}; \boldsymbol{\theta}) =
+    \mathbf{w}_2^\T\,\sigma\!\bigl(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_1\bigr) + b_2,
+\]
+donde $\mathbf{W}_1 \in \R^{4\times 2}$, $\mathbf{b}_1 \in \R^4$, $\mathbf{w}_2 \in \R^4$
+y $b_2 \in \R$ son los parámetros, y $\boldsymbol{\theta} \in \R^{17}$.
+
+La función de costo correspondiente,
+\[
+  J(\boldsymbol{\theta}) = \frac{1}{n}\sum_{i=1}^{n}
+    \bigl(\hat{y}(\mathbf{x}_i;\boldsymbol{\theta}) - y_i\bigr)^2,
+\]
+ya no es cuadrática en $\boldsymbol{\theta}$ debido a la no linealidad de $\sigma$.
+Como consecuencia:
+
+\begin{enumerate}[label=(\roman*)]
+  \item La Hessiana $\nabla^2 J$ no es constante: depende de $\boldsymbol{\theta}$.
+  \item $J$ no es convexa en general: puede tener múltiples mínimos locales,
+    máximos locales y puntos de silla.
+  \item No existe una fórmula cerrada equivalente a~\eqref{eq:lsmulti}.
+\end{enumerate}
+
+El descenso por gradiente\textemdash y sus variantes (Adam, RMSprop, Adagrad)---
+es el único método de optimización práctico disponible.
+
+\subsection{La geometría del espacio de parámetros: variedades singulares}
+
+La geometría de la superficie $J(\boldsymbol{\theta})$ para una red neuronal
+es cualitativamente diferente al bowl elipsoidal de GradienViz.
+
+Para una red neuronal con función de activación suave, $J$ define una
+\emph{variedad estadística} en el espacio de parámetros. A diferencia del
+elipsoide, esta variedad tiene \textbf{singularidades}: regiones donde la
+Hessiana es singular (no invertible), incluyendo valles planos extendidos,
+crestas, y mesetas.
+
+Estas singularidades surgen de manera inevitable por las simetrías del modelo.
+Por ejemplo, en la red $2\to 4\to 1$, permutar las cuatro neuronas ocultas
+produce exactamente la misma función de salida: hay $4! = 24$ configuraciones
+de parámetros distintas que representan el mismo modelo. Cada punto del mínimo
+global de $J$ tiene al menos 23 copias exactas en el espacio de parámetros,
+todas igualmente válidas.
+
+En la teoría de aprendizaje estadístico singular\footnote{%
+  Watanabe, S. (2009). \textit{Algebraic Geometry and Statistical Learning Theory}.
+  Cambridge University Press.}, se demuestra que la estructura de estas
+singularidades determina propiedades del proceso de aprendizaje como
+la generalización, el comportamiento en muestras pequeñas y la
+complejidad efectiva del modelo\textemdash aspectos que no tienen
+análogo en la geometría convexa de la regresión lineal.
+
+\subsection{La regla de actualización es la misma}
+
+A pesar de estas diferencias, la iteración fundamental es idéntica a~\eqref{eq:update}:
+\[
+  \boldsymbol{\theta}^{(t+1)} = \boldsymbol{\theta}^{(t)}
+    - \eta\,\grad J\!\left(\boldsymbol{\theta}^{(t)}\right).
+\]
+
+Lo que cambia es cómo se calcula $\grad J$.
+En regresión lineal, las derivadas parciales~\eqref{eq:gm}--\eqref{eq:gb}
+se obtienen directamente. En una red neuronal, el cálculo del gradiente
+se realiza mediante el algoritmo de \textbf{retropropagación}
+(\emph{backpropagation}), que aplica la regla de la cadena de manera
+sistemática a lo largo de la arquitectura de la red.
+
+El visualizador GradienViz muestra, en su esencia más simple, el mismo
+proceso que ocurre durante el entrenamiento de cualquier red neuronal:
+una trayectoria en el espacio de parámetros que sigue la dirección del
+gradiente negativo. En la red, ese espacio tiene 17, 17\,000 o $10^{11}$
+dimensiones y no puede representarse visualmente; pero la idea subyacente
+es la misma que se ve en el Panel~2.
+
+% =============================================================================
+\section*{Resumen}
+% =============================================================================
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  & \textbf{Regresión lineal (GradienViz)} & \textbf{Red neuronal $2\to 4\to 1$} \\
+  \midrule
+  Parámetros          & 2 $(m, b)$          & 17 \\
+  Función de costo    & Cuadrática, convexa & No lineal, no convexa \\
+  Mínimo global       & Único, analítico    & Múltiple, sin fórmula cerrada \\
+  Hessiana            & Constante           & Depende de $\boldsymbol{\theta}$ \\
+  Paisaje de $J$      & Elipsoide regular   & Variedad singular \\
+  Solución exacta     & Sí \eqref{eq:exacta} & No \\
+  Necesidad del alg.  & Ninguna (pedagógica) & Indispensable \\
+  Regla de actualiz.  & \eqref{eq:update}   & \eqref{eq:update} (misma) \\
+  Cálculo del gradiente & Fórmulas directas & Retropropagación \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+
+El descenso por gradiente es un algoritmo de propósito general cuya utilidad
+real emerge cuando no existe solución analítica, cuando el espacio de parámetros
+es de dimensión muy alta, o cuando la función de costo tiene una geometría
+compleja. GradienViz ofrece la única situación en que ese algoritmo puede
+verse funcionando en un espacio de dos dimensiones, con la solución correcta
+siempre visible como referencia.
+
+\end{document}

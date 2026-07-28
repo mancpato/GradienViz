@@ -1,0 +1,322 @@
+\documentclass[12pt, a4paper]{article}
+
+% ── Paquetes ─────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% babel-spanish no disponible en esta instalación
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+% ── Geometría ────────────────────────────────────────────────────────
+\geometry{
+    top    = 2.5cm,
+    bottom = 2.5cm,
+    left   = 3.0cm,
+    right  = 3.0cm
+}
+
+% ── Colores ──────────────────────────────────────────────────────────
+\definecolor{azulviz}{RGB}{37, 99, 235}
+\definecolor{naranjviz}{RGB}{251, 146, 60}
+\definecolor{verdviz}{RGB}{52, 211, 153}
+\definecolor{amarillviz}{RGB}{251, 191, 36}
+\definecolor{fondocaja}{RGB}{240, 245, 255}
+\definecolor{bordecruz}{RGB}{37, 99, 235}
+\definecolor{fondoadv}{RGB}{255, 248, 230}
+\definecolor{bordeadv}{RGB}{251, 146, 60}
+\definecolor{fondoteo}{RGB}{235, 250, 242}
+\definecolor{bordeteo}{RGB}{52, 153, 110}
+
+% ── Entornos ─────────────────────────────────────────────────────────
+\mdfdefinestyle{vizverde}{
+    backgroundcolor = fondoteo,
+    linecolor       = bordeteo,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\mdfdefinestyle{viznaranja}{
+    backgroundcolor = fondoadv,
+    linecolor       = bordeadv,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\mdfdefinestyle{vizazul}{
+    backgroundcolor = fondocaja,
+    linecolor       = bordecruz,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\newenvironment{viznota}[1]{%
+    \begin{mdframed}[style=vizverde]
+    \textbf{\color{bordeteo}En GradienViz \textemdash\ #1.}\quad
+}{%
+    \end{mdframed}
+}
+
+\newenvironment{vizadv}{%
+    \begin{mdframed}[style=viznaranja]
+    \textbf{\color{bordeadv}Atención:}\quad
+}{%
+    \end{mdframed}
+}
+
+\newenvironment{vizdef}{%
+    \begin{mdframed}[style=vizazul]
+}{%
+    \end{mdframed}
+}
+
+% ── Comandos matemáticos ─────────────────────────────────────────────
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\grad}{\nabla}
+\newcommand{\mstar}{m^{*}}
+\newcommand{\bstar}{b^{*}}
+\newcommand{\Jfun}{J(m,b)}
+
+% ── Hyperref ─────────────────────────────────────────────────────────
+\hypersetup{
+    colorlinks = true,
+    linkcolor  = azulviz,
+    urlcolor   = azulviz,
+    citecolor  = azulviz
+}
+
+% ── Metadatos ────────────────────────────────────────────────────────
+\title{
+    {\Large\bfseries Descenso por gradiente en regresión lineal}\\[0.4em]
+    {\large Una introducción con Cálculo Diferencial y GradienViz}\\[0.8em]
+    {\normalsize Notas de lectura para estudiantes de primer semestre}
+}
+\author{
+    Departamento Académico de Sistemas Computacionales\\
+    Universidad Autónoma de Baja California Sur
+}
+\date{2026}
+
+% ──────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents
+\vspace{1em}
+
+\begin{vizadv}
+Este documento requiere únicamente conocimientos de \textbf{Cálculo Diferencial de una variable} (el concepto de derivada como pendiente y razón de cambio) y geometría analítica básica. Se recomienda tener abierto \textbf{GradienViz} mientras se lee para acompañar la teoría con la simulación interactiva.
+\end{vizadv}
+
+\section{Punto de partida: ajustando una recta a datos}
+
+Cuando abres GradienViz y colocas algunos puntos en el Panel~1, la herramienta calcula automáticamente la pendiente~$\mstar$ y el intercepto~$\bstar$ de la recta que mejor se ajusta a esos datos, y marca el punto $(\mstar, \bstar)$ con una cruz amarilla~$\oplus$ en el Panel~2. Esos dos números son la solución al siguiente problema:
+
+\begin{vizdef}
+\textbf{Problema de regresión lineal simple.} Dados $n$ puntos $(x_i, y_i)$ para $i = 1, \ldots, n$, encontrar los valores $m, b \in \R$ que minimizan el error cuadrático medio:
+\begin{equation}\label{eq:J}
+    \Jfun = \frac{1}{n}\sum_{i=1}^{n}\bigl(m x_i + b - y_i\bigr)^2.
+\end{equation}
+\end{vizdef}
+
+Para este problema existe una fórmula directa exacta. Definiendo las sumas
+\[
+    S_x = \sum x_i, \quad
+    S_y = \sum y_i, \quad
+    S_{xy} = \sum x_i y_i, \quad
+    S_{x^2} = \sum x_i^2,
+\]
+se obtiene directamente:
+\begin{equation}\label{eq:exacta}
+    \mstar = \frac{n S_{xy} - S_x S_y}{n S_{x^2} - S_x^2}, \qquad
+    \bstar = \frac{S_y - \mstar S_x}{n}.
+\end{equation}
+
+Si ya existe esta fórmula, \textbf{¿para qué simular un algoritmo de iteración pasito a pasito?} La respuesta es que en modelos más complejos (como las redes neuronales) no existe una fórmula directa, y la derivada es la única herramienta que nos permite ``aprender'' o encontrar la solución navegando a ciegas.
+
+\begin{viznota}{Panel~1}
+La recta gris punteada es $y = \mstar x + \bstar$, calculada analíticamente con \eqref{eq:exacta}. La recta naranja es la estimación provisional que el algoritmo va corrigiendo en cada paso hasta alcanzar a la solución exacta.
+\end{viznota}
+
+\section{La función de costo como superficie o tazón}
+
+La expresión~\eqref{eq:J} mide el error total de la recta dados los parámetros $m$ y $b$. Si fijamos los datos $(x_i, y_i)$, cada par $(m, b)$ produce un valor de error $J$. Al graficar $J$ en función de $m$ y $b$, obtenemos una superficie tridimensional con forma de \textbf{tazón} (un paraboloide). Si expandimos la suma en~\eqref{eq:J}, observamos que para $m$ (o para $b$) la función $J$ es un polinomio de grado~2 (una parábola que abre hacia arriba). Esto garantiza que el tazón tiene \textbf{un único punto mínimo}, ubicado exactamente en $(\mstar, \bstar)$.
+
+\begin{viznota}{Panel~2, mapa de calor}
+El mapa de color viridis representa la función $\Jfun$: las zonas azul oscuro corresponden a errores pequeños (cerca del fondo del tazón) y las amarillas a errores grandes. Observa que siempre se forma un único valle sin bordes ni pozos secundarios.
+\end{viznota}
+
+\section{La derivada como guía: ¿hacia dónde movernos?}
+
+Para encontrar el fondo del tazón desde un punto inicial cualquiera, necesitamos saber hacia dónde decrece la función. Aquí es donde entra la derivada.
+
+La función $J(m, b)$ depende de dos variables, pero la idea es sencilla: derivamos respecto a una sola variable a la vez, \textbf{tratando la otra como si fuera una constante}. Esta operación\textemdash que practicarás formalmente al final del semestre bajo el nombre de \emph{derivada parcial}\textemdash se aplica igual que cualquier derivada de polinomio.
+
+\medskip
+\textbf{Derivada respecto a $m$ (tratando $b$ como constante):}
+\begin{equation}\label{eq:gm}
+    \frac{\partial J}{\partial m} = \frac{2}{n}\sum_{i=1}^{n}(m x_i + b - y_i)\,x_i.
+\end{equation}
+
+\textbf{Derivada respecto a $b$ (tratando $m$ como constante):}
+\begin{equation}\label{eq:gb}
+    \frac{\partial J}{\partial b} = \frac{2}{n}\sum_{i=1}^{n}(m x_i + b - y_i).
+\end{equation}
+
+El símbolo $\partial$ (``d redonda'') es la notación estándar para estas derivadas parciales; por ahora basta saber que se calculan exactamente igual que una derivada ordinaria, fijando la otra variable.
+
+\subsection{El gradiente}
+
+El \textbf{gradiente}, denotado por $\grad J(m, b)$, es simplemente un vector que agrupa ambas derivadas parciales:
+\[
+    \grad J(m, b) =
+    \begin{pmatrix} \partial J/\partial m \\[4pt] \partial J/\partial b \end{pmatrix}
+    = \frac{2}{n}\begin{pmatrix}
+        \displaystyle\sum_{i=1}^{n}(m x_i + b - y_i)\,x_i \\[8pt]
+        \displaystyle\sum_{i=1}^{n}(m x_i + b - y_i)
+    \end{pmatrix}.
+\]
+Geométricamente:
+\begin{enumerate}[label=(\roman*)]
+    \item La derivada nos da la pendiente o inclinación de la superficie en ese punto.
+    \item El vector gradiente $\grad J$ apunta en la dirección de \textbf{máximo crecimiento} del error.
+    \item Por lo tanto, el sentido opuesto, $-\grad J$, apunta directamente en la dirección de \textbf{mayor descenso} (hacia el fondo del tazón).
+\end{enumerate}
+
+\begin{viznota}{Panel~2, campo vectorial}
+Las flechas pequeñas en el Panel~2 representan el vector de descenso $-\grad J$ en cada punto. Nota cómo todas las flechas apuntan hacia la cruz amarilla~$\oplus$ y se hacen más cortas cerca del mínimo, reflejando que las derivadas se vuelven cero en el punto óptimo.
+\end{viznota}
+
+\section{El algoritmo de descenso por gradiente}
+
+La idea del descenso por gradiente es simple: comenzar en una estimación inicial $(m_0, b_0)$ y dar pasos en la dirección opuesta a la derivada.
+
+\begin{vizdef}
+\textbf{Regla de actualización.} En cada paso $t$, corregimos los parámetros
+restando una fracción de la derivada parcial correspondiente,
+evaluada en los valores actuales $(m^{(t)}, b^{(t)})$:
+\begin{align*}
+    m^{(t+1)} &= m^{(t)}
+      - \frac{2\eta}{n}\sum_{i=1}^{n}\bigl(m^{(t)} x_i + b^{(t)} - y_i\bigr)\,x_i, \\[6pt]
+    b^{(t+1)} &= b^{(t)}
+      - \frac{2\eta}{n}\sum_{i=1}^{n}\bigl(m^{(t)} x_i + b^{(t)} - y_i\bigr).
+\end{align*}
+O en forma compacta, usando la notación de gradiente:
+\[
+    \begin{pmatrix} m^{(t+1)} \\ b^{(t+1)} \end{pmatrix}
+    =
+    \begin{pmatrix} m^{(t)} \\ b^{(t)} \end{pmatrix}
+    - \eta\,\grad J\!\left(m^{(t)}, b^{(t)}\right).
+\]
+La constante $\eta > 0$ (\textit{eta}) se conoce como \textbf{tasa de aprendizaje}
+(\textit{learning rate}).
+\end{vizdef}
+
+\subsection{El rol de la tasa de aprendizaje \texorpdfstring{$\eta$}{eta}}
+
+La tasa de aprendizaje $\eta$ determina el tamaño del paso en cada iteración:
+
+\begin{center}
+\begin{tabular}{lll}
+    \toprule
+    Régimen              & Comportamiento                        & Causa \\
+    \midrule
+    $\eta$ muy pequeño  & Convergencia muy lenta                & Pasos demasiado cortos \\
+    $\eta$ adecuado     & Convergencia suave hacia $(\mstar,\bstar)$ & Paso equilibrado \\
+    $\eta$ demasiado grande & Oscilaciones o divergencia          & El paso ``rebasa'' el valle \\
+    \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{viznota}{slider $\eta$}
+Modifica el deslizador de $\eta$. Si asignas un valor muy pequeño el algoritmo tardará cientos de iteraciones en llegar a la solución; si pruebas un valor alto (p. ej., $\eta > 0.3$), verás cómo las trayectorias rebotan y se disparan fuera de la pantalla.
+\end{viznota}
+
+\section{Geometría del error y el parámetro \texorpdfstring{$\kappa$}{kappa}}
+
+Si el tazón del error fuera perfectamente circular, las derivadas apuntarían directo al centro y el algoritmo convergiría en pocas iteraciones. Sin embargo, dependiendo de la distribución de los puntos en el Panel~1, el tazón puede deformarse hasta convertirse en un valle muy estrecho y alargado.
+
+GradienViz calcula un indicador de esa deformación llamado \textbf{número de condición} ($\kappa$), que mide la razón entre la curvatura más pronunciada y la más suave del tazón:
+
+\begin{itemize}
+    \item \textbf{$\kappa \approx 1$\ (tazón redondo):}
+    Ambas curvaturas son similares. El gradiente apunta casi recto al mínimo
+    y el algoritmo converge en pocas iteraciones.
+
+    \item \textbf{$\kappa = 100$\ (valle moderado):}
+    El tazón es 100 veces más ancho en una dirección que en la otra.
+    El gradiente toma un camino oblicuo, necesitando más iteraciones.
+
+    \item \textbf{$\kappa \gg 1000$\ (valle estrecho):}
+    La pendiente lateral del valle es miles de veces mayor que la del fondo.
+    El algoritmo avanza en zigzag de pared en pared, con convergencia muy lenta
+    o nula dentro del límite de iteraciones.
+\end{itemize}
+
+\begin{viznota}{Panel 1, esquina superior derecha}
+Arrastra los puntos en el Panel 1 para alinearlos casi de forma vertical (mismo valor de $x$). Verás cómo el valor de $\kappa$ se dispara y se torna naranja. Geométricamente, si todas las $x$ son iguales, es imposible determinar la pendiente $m$ de una recta, por lo que el algoritmo sufre para encontrar una solución.
+\end{viznota}
+
+\section{De la recta a las redes neuronales}
+
+Para una recta, la fórmula exacta~\eqref{eq:exacta} es instantánea y no requiere iteraciones. ¿Por qué el descenso por gradiente es entonces el pilar fundamental de la Inteligencia Artificial?
+
+\subsection{De 2 parámetros a miles de millones}
+
+En regresión lineal simple solo ajustamos 2 parámetros ($m$ y $b$). Una red neuronal para clasificar imágenes o un modelo de lenguaje (como GPT) puede tener entre miles y cientos de \textbf{miles de millones} de parámetros. A esa escala no existen fórmulas analíticas cerradas, y el descenso por gradiente es la única alternativa computable.
+
+\subsection{La regla de aprendizaje es idéntica}
+
+Aunque una red neuronal combine múltiples capas y funciones no lineales, la regla con la que aprende parámetro por parámetro en cada paso es exactamente la misma que acabas de ver:
+\[
+    \text{Parámetro nuevo} = \text{Parámetro actual}
+    - \eta \times \left(\frac{\partial\,\text{Error}}{\partial\,\text{Parámetro}}\right).
+\]
+En las redes neuronales hay miles de parámetros y la función de error pasa por muchas capas de operaciones anidadas. Para calcular cada derivada parcial se aplica la \textbf{regla de la cadena}\textemdash la misma que usas en Cálculo~I para derivar composiciones de funciones\textemdash de manera sistemática desde la salida de la red hasta cada uno de sus parámetros. Este procedimiento se llama \textbf{retropropagación} (\textit{backpropagation}) y es el corazón computacional de todo el aprendizaje profundo.
+
+\subsection{Resumen comparativo}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+    \toprule
+    & \textbf{Regresión lineal (GradienViz)} & \textbf{Red neuronal} \\
+    \midrule
+    Parámetros a ajustar      & 2 ($m$ y $b$)               & Miles a miles de millones \\
+    ¿Se puede visualizar?     & Sí (Panel~2, 2D)            & No (demasiadas dimensiones) \\
+    Forma del error           & Tazón suave (único mínimo)  & Superficie con múltiples valles \\
+    ¿Existe fórmula exacta?   & Sí \eqref{eq:exacta}       & No \\
+    Método de ajuste          & Descenso por gradiente      & Descenso por gradiente \\
+    Herramienta clave         & Derivadas parciales         & Derivadas parciales + regla de la cadena \\
+    \bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+Cuando presionas \textbf{Train} en GradienViz, estás observando en dos dimensiones exactamente el mismo principio con el que se entrenan los modelos de inteligencia artificial más avanzados del mundo: ajustar parámetros paso a paso siguiendo la dirección que señalan las derivadas.
+
+\end{document}

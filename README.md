@@ -4,16 +4,20 @@
 
 Herramienta pedagógica para cursos de inteligencia artificial, aprendizaje automático y optimización numérica. Implementada en p5.js como un único archivo HTML autocontenido — no requiere instalación ni servidor.
 
+Está acompañado de dos documentos en LaTeX:
+- **GradienVizMate.tex**, pensado para estudiantes de redes neuronales que ya cursaron las matemáticas necesarias (cálculo, álgebra lineal y estadística).
+- **GradienVizMateBasic.tex**, para estudiantes de cálculo diferencial.
+
 ---
 
 ## Uso
 
-Descarga `GradienViz_v2.1.html` y ábrelo en cualquier navegador moderno. No requiere conexión a internet una vez descargado.
+Descarga `GradienViz.html` y ábrelo en cualquier navegador moderno. No requiere conexión a internet una vez descargado.
 
 ```
 git clone https://github.com/mancpato/GradienViz.git
 cd GradienViz
-# Abrir GradienViz_v2.1.html en el navegador
+# Abrir GradienViz.html en el navegador
 ```
 
 ---
@@ -103,6 +107,13 @@ Con el colormap verde→rojo se puede observar que todas las trayectorias conver
 
 ## Contexto
 
-Desarrollado para los cursos de Inteligencia Artificial y similares Departamento Académico de Sistemas Computacionales (DASC), Universidad Autónoma de Baja California Sur (UABCS).
+Desarrollado para los cursos de Inteligencia Artificial y similares del Departamento Académico de Sistemas Computacionales (DASC), Universidad Autónoma de Baja California Sur (UABCS).
 
 Forma parte de una colección de herramientas de visualización pedagógica implementadas en p5.js.
+
+---
+
+## Elaborado por
+
+*Miguel Ángel Norzagaray Cosío*, DASC/UABCS — concepción, diseño pedagógico, ediciones menores y todas las decisiones del proyecto.
+Asistencia técnica: *Claude Sonnet* (Anthropic) — implementación, depuración y documentación bajo dirección del autor.
