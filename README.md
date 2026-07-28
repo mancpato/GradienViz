@@ -3,6 +3,7 @@
 **Visualizador interactivo de descenso por gradiente en regresión lineal**
 
 Herramienta pedagógica para cursos de inteligencia artificial, aprendizaje automático y optimización numérica. Implementada en p5.js como un único archivo HTML autocontenido — no requiere instalación ni servidor.
+<img src="GradienViz.png" alt="Pantalla de ejemplo" width="700">
 
 Está acompañado de dos documentos en LaTeX:
 - **GradienVizMate.tex**, pensado para estudiantes de redes neuronales que ya cursaron las matemáticas necesarias (cálculo, álgebra lineal y estadística).
