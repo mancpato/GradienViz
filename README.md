@@ -129,4 +129,5 @@ Forma parte de una colección de herramientas de visualización pedagógica impl
 ## Elaborado por
 
 *Miguel Ángel Norzagaray Cosío*, DASC/UABCS — concepción, diseño pedagógico, ediciones menores y todas las decisiones del proyecto.
-Asistencia técnica: *Claude Sonnet* (Anthropic) — implementación, depuración, optimización y documentación bajo dirección del autor.
+
+**Asistencia técnica**: *Claude Sonnet* (Anthropic) — implementación, depuración, optimización y documentación bajo dirección del autor.
