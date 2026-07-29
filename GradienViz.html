@@ -204,20 +204,21 @@
 
 <script>
 /* GradienViz
-
- * Este página ilustra el descenso por gradiente en un problema de 
+ *
+ * Esta página ilustra el descenso por gradiente en un problema de
  * regresión lineal simple. Pretende simular la manera como una red
  * neuronal aprende a ajustar sus parámetros (pesos y bias) pero
- * sirve para aclarar que aquí son sólo dos parámetros: pendiente y ordenada
- * al origen, mientras que en una red neuronal hay muchos más y se organizan 
- * en capas. Por ejemplo, una red simple 2->4->1 tiene 9 parámetros (8 pesos 
- * y 1 bias) en la primera capa y 5 en la de salida (4 pesos y 1 bias).
- * 
+ * sirve para aclarar que aquí son sólo dos parámetros: pendiente y
+ * ordenada al origen, mientras que en una red neuronal hay muchos
+ * más y se organizan en capas. Por ejemplo, una red simple 2->4->1
+ * tiene 12 parámetros en la capa oculta (8 pesos y 4 bias) y 5 en la
+ * de salida (4 pesos y 1 bias): 17 en total.
+ *
  * Para más detalles, consultar GradienVizMate.tex en el repositorio.
  *
  * UABCS - manc
- * Desarrollado con ayuda de Claude (Antropic).
- */ 
+ * Desarrollado con ayuda de Claude (Anthropic).
+ */
 
  // BLOQUE A — Constantes y paletas de color
 const VIRIDIS = [
@@ -253,6 +254,8 @@ function convColor(t) {
 }
 
 const FS  = 14;  // font size base en px — cambia solo esto para recalibrar
+const JITTER_MAX = 0.025;  // desplazamiento máximo en x al perturbar
+const D_REF_COLOR = 0.12;  // fracción del rango: distancia que da rojo pleno
 
 // Padding interno de cada panel (px)
 const PAD = { l: 52, r: 16, t: 18, b: 60 };
@@ -290,7 +293,6 @@ const G = {
   bufDirty:   true,
 
   puntoDrag:  null,
-  puntoSelec: null,
 
   condicion: null,
 };
@@ -413,11 +415,32 @@ function calcCondicion(puntos)
 
 function recalcularTodo() {
   const res = calcRegresion(G.puntos);
-  if (!res) return;
+  if (!res) {
+    G.m_star = null;
+    G.b_star = null;
+    G.J_star = null;
+    G.condicion = Infinity;
+    G.bufDirty = true;
+    limpiarTrayectorias();
+    return;
+  }
   Object.assign(G, res, calcRango(res.m_star, res.b_star));
   G.condicion = calcCondicion(G.puntos);
   G.bufDirty = true;
   limpiarTrayectorias();
+}
+
+// Perturba solo las coordenadas x. El número de condición κ(XᵀX)
+// depende únicamente de la varianza de los x_i: det(XᵀX) = n²·Var(x).
+// El ruido independiente inyecta varianza (≈ JITTER_MAX²/3) y hace
+// caer κ proporcionalmente.
+function perturbarPuntos() {
+  if (!G.puntos.length) return;
+  for (const p of G.puntos) {
+    const delta = (Math.random() - 0.5) * 2 * JITTER_MAX;
+    p.x = Math.max(0, Math.min(1, p.x + delta));
+  }
+  recalcularTodo();
 }
 
 function limpiarTrayectorias() {
@@ -448,19 +471,17 @@ function inicializarTrayectorias() {
     }
   }
 
-  G.dMaxColor = 0;
-  for (const tr of G.trayectorias) {
-    const d = Math.sqrt((tr.hist[0].m - G.m_star)**2 + (tr.hist[0].b - G.b_star)**2);
-    if (d > G.dMaxColor) G.dMaxColor = d;
-  }
-  G.dMaxColor = Math.max(G.dMaxColor, 0.001);
 }
 
 function asignarColorConvergencia(idx) {
   const tr = G.trayectorias[idx];
   const {m, b} = tr.hist[tr.hist.length - 1];
-  const d = Math.sqrt((m - G.m_star)**2 + (b - G.b_star)**2);
-  const t = Math.min(d / G.dMaxColor, 1);
+  // Distancia normalizada: fracción del rango visible en cada eje
+  const dm = (m - G.m_star) / (G.m_hi - G.m_lo);
+  const db = (b - G.b_star) / (G.b_hi - G.b_lo);
+  const d  = Math.sqrt(dm*dm + db*db);
+  // Referencia: a 12% del rango visible ya es rojo pleno
+  const t  = Math.min(d / D_REF_COLOR, 1);
   tr.colorFinal = convColor(t);
 }
 
@@ -521,15 +542,7 @@ function avanzarPasos(n) {
     G.estado = 'detenido';
     actualizarEstadoControles();
   }
-  // Si ya convergió o llegó al límite, permitir seguir viendo paso a paso
-  // (aunque no cambiará nada si todo convergió)
-  if (G.estado === 'convergido' || G.estado === 'limite') {
-    // resetear para poder seguir avanzando desde el mismo punto
-    // conservamos histJ y trayectorias pero reseteamos flags
-    G.trayectorias.forEach(tr => { tr.conv = false; tr.div = false; });
-    G.estado = 'detenido';
-    actualizarEstadoControles();
-  }
+  if (G.estado === 'convergido' || G.estado === 'limite') return;
 
   for (let i = 0; i < n; i++) {
     pasoSimulacion();
@@ -613,6 +626,7 @@ function dibujarGridP1(panel) {
 
 function dibujarRectaRegresion(panel) {
   if (G.puntos.length < 3) return;
+  if (G.m_star === null) return;
   const {cx:x0,cy:y0} = d2c(panel, 0, G.b_star);
   const {cx:x1,cy:y1} = d2c(panel, 1, G.m_star+G.b_star);
   drawingContext.setLineDash([6, 4]);
@@ -660,14 +674,16 @@ function dibujarPanel1() {
   textSize(FS);
   textAlign(LEFT, BOTTOM);
   text(
-    nPts >= 3
+    nPts >= 3 && G.m_star !== null
       ? `${nPts}/20 pts  |  MSE: ${G.J_star.toFixed(4)}`
       : `${nPts}/20 pts  (mín. 3 para entrenar)`,
     p.ox + PAD.l, p.oy + p.ch - 22
   );
   if (nPts >= 3) {
     text(
-      `m* = ${G.m_star.toFixed(3)}    b* = ${G.b_star.toFixed(3)}`,
+      G.m_star === null
+        ? 'sistema singular — x constante'
+        : `m* = ${G.m_star.toFixed(3)}    b* = ${G.b_star.toFixed(3)}`,
       p.ox + PAD.l, p.oy + p.ch - 4
     );
     if (G.condicion !== null) {
@@ -700,6 +716,7 @@ function dibujarPanel1() {
 // ── Panel 2 ──────────────────────────────────────────────────
 
 function construirHeatmap() {
+  if (G.m_star === null) return;
   const N = G.resHeatmap;
   const celdas = [];
   let Jmin=Infinity, Jmax=-Infinity;
@@ -713,7 +730,11 @@ function construirHeatmap() {
     }
   }
   const rng = Jmax-Jmin+1e-12;
-  for (const c of celdas) c.col = viridis((c.J-Jmin)/rng);
+  for (const c of celdas) {
+    const t = (c.J - Jmin) / rng;              // t ∈ [0,1]
+    const tLog = Math.log(1 + 9*t) / Math.log(10);  // comprime el rango alto
+    c.col = viridis(tLog);
+  }
   G.bufHeatmap = celdas;
   G.bufDirty   = false;
 }
@@ -735,6 +756,7 @@ function dibujarHeatmap(panel) {
 
 function dibujarPuntoOptimo_P2(panel) {
   if (G.puntos.length < 3) return;
+  if (G.m_star === null) return;
   const {cx,cy} = p2c(panel, G.m_star, G.b_star);
   stroke(251,191,36); strokeWeight(2); noFill();
   const r=7;
@@ -789,13 +811,26 @@ function dibujarRectaFoco(panel) {
 function dibujarPanel2() {
   const p2 = paneles.P2;
   dibujarPanel(p2, 'Espacio (m, b)', 17,17,17, 51,51,51);
-  if (G.puntos.length >= 3) {
+  if (G.puntos.length >= 3 && G.m_star !== null) {
     if (G.bufDirty || !G.bufHeatmap) construirHeatmap();
     dibujarHeatmap(p2);
   }
   dibujarEjes(p2, G.m_lo, G.m_hi, G.b_lo, G.b_hi, 5);
   dibujarTrayectorias(p2);
   dibujarPuntoOptimo_P2(p2);
+
+  const nConv = G.trayectorias.filter(tr => tr.conv).length;
+  const nTot  = G.trayectorias.length;
+  if (nTot > 0) {
+    noStroke(); fill(122,122,154);
+    textFont('IBM Plex Mono, monospace');
+    textSize(FS - 1);
+    textAlign(RIGHT, TOP);
+    text(`iter ${G.paso} / ${G.maxIter}`,
+         p2.ox + p2.cw - PAD.r, p2.oy + PAD.t + 4);
+    text(`conv. ${nConv} / ${nTot}`,
+         p2.ox + p2.cw - PAD.r, p2.oy + PAD.t + 4 + FS + 2);
+  }
 
   // Indicador de estado en el footer
   let estadoTexto = null;
@@ -870,7 +905,7 @@ const RES_VALUES  = [6, 8, 10, 12, 16];
 const TRAY_VALUES = [3, 4, 5, 6];
 const SPEED_VALUES = [1, 2, 5, 10, 20, 50, 100]; // NUEVO
 
-let elBtnTrain, elBtnReset, elBtnPuntos;
+let elBtnTrain, elBtnReset, elBtnPuntos, elBtnPerturbar;
 let elBtnStep1, elBtnStep10, elBtnStep50; // NUEVO
 let elSliderRes, elSliderTray, elSliderEta, elSliderSpeed; // NUEVO speed
 let elCheckRastro, elInputFoco;
@@ -883,10 +918,14 @@ function crearControles() {
   // ── Datos ────────────────────────────────────────────────
   const secDatos = mkSection('Datos');
   elBtnPuntos = mkBtn('Puntos aleatorios', '', () => {
-    G.puntos = Array.from({length:10}, () => ({x:Math.random(), y:Math.random()}));
+    const nPts = 5 + Math.floor(Math.random() * 11);  // 5 a 15
+    G.puntos = Array.from({length:nPts}, () => ({x:Math.random(), y:Math.random()}));
     recalcularTodo();
   });
   secDatos.appendChild(elBtnPuntos);
+
+  elBtnPerturbar = mkBtn('Perturbar', '', perturbarPuntos);
+  secDatos.appendChild(elBtnPerturbar);
   sb.appendChild(secDatos);
 
   // ── Modelo ───────────────────────────────────────────────
@@ -901,7 +940,17 @@ function crearControles() {
   // numTrayPorLado (índice discreto)
   [elSliderTray, elValTray] = mkSlider(
     secModelo, 'Trayectorias', 0, TRAY_VALUES.length-1, TRAY_VALUES.indexOf(G.numTrayPorLado),
-    v => { G.numTrayPorLado = TRAY_VALUES[v]; limpiarTrayectorias(); return G.numTrayPorLado; }
+    v => {
+      G.numTrayPorLado = TRAY_VALUES[v];
+      const maxIdx = G.numTrayPorLado * G.numTrayPorLado - 1;
+      elInputFoco.max = maxIdx;
+      if (G.trajEnFoco > maxIdx) {
+        G.trajEnFoco = maxIdx;
+        elInputFoco.value = maxIdx;
+      }
+      limpiarTrayectorias();
+      return G.numTrayPorLado;
+    }
   );
 
   // eta (logarítmico)
@@ -936,10 +985,11 @@ function crearControles() {
   elInputFoco = document.createElement('input');
   elInputFoco.type  = 'number';
   elInputFoco.min   = 0;
-  elInputFoco.max   = 35;
+  elInputFoco.max   = G.numTrayPorLado * G.numTrayPorLado - 1;
   elInputFoco.value = G.trajEnFoco;
   elInputFoco.addEventListener('change', () => {
-    G.trajEnFoco = Math.max(0, Math.min(35, +elInputFoco.value));
+    const maxIdx = +elInputFoco.max;
+    G.trajEnFoco = Math.max(0, Math.min(maxIdx, +elInputFoco.value));
     elInputFoco.value = G.trajEnFoco;
   });
   rowFoco.appendChild(lblFoco);
@@ -1001,6 +1051,7 @@ function actualizarEstadoControles() {
   if (!elBtnTrain) return;
   const anim = G.estado === 'animando';
   elBtnPuntos.disabled  = anim;
+  elBtnPerturbar.disabled = anim;
   elSliderRes.disabled  = anim;
   elSliderTray.disabled = anim;
   elSliderEta.disabled  = anim;

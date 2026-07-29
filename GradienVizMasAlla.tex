@@ -1,0 +1,360 @@
+\documentclass[12pt, a4paper]{article}
+
+% ── Paquetes ─────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% babel-spanish no disponible en esta instalación
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+% ── Geometría ────────────────────────────────────────────────────────
+\geometry{
+    top    = 2.5cm,
+    bottom = 2.5cm,
+    left   = 3.0cm,
+    right  = 3.0cm
+}
+
+% ── Colores ──────────────────────────────────────────────────────────
+\definecolor{azulviz}{RGB}{37, 99, 235}
+\definecolor{naranjviz}{RGB}{251, 146, 60}
+\definecolor{verdviz}{RGB}{52, 211, 153}
+\definecolor{amarillviz}{RGB}{251, 191, 36}
+\definecolor{fondocaja}{RGB}{240, 245, 255}
+\definecolor{bordecruz}{RGB}{37, 99, 235}
+\definecolor{fondoadv}{RGB}{255, 248, 230}
+\definecolor{bordeadv}{RGB}{251, 146, 60}
+\definecolor{fondoteo}{RGB}{235, 250, 242}
+\definecolor{bordeteo}{RGB}{52, 153, 110}
+
+% ── Entornos ─────────────────────────────────────────────────────────
+\mdfdefinestyle{vizverde}{
+    backgroundcolor = fondoteo,
+    linecolor       = bordeteo,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\mdfdefinestyle{viznaranja}{
+    backgroundcolor = fondoadv,
+    linecolor       = bordeadv,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\mdfdefinestyle{vizazul}{
+    backgroundcolor = fondocaja,
+    linecolor       = bordecruz,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\newenvironment{viznota}[1]{%
+    \begin{mdframed}[style=vizverde]
+    \textbf{\color{bordeteo}En GradienViz \textemdash\ #1.}\quad
+}{%
+    \end{mdframed}
+}
+
+\newenvironment{vizadv}{%
+    \begin{mdframed}[style=viznaranja]
+    \textbf{\color{bordeadv}Atención:}\quad
+}{%
+    \end{mdframed}
+}
+
+\newenvironment{vizdef}{%
+    \begin{mdframed}[style=vizazul]
+}{%
+    \end{mdframed}
+}
+
+% ── Comandos matemáticos ─────────────────────────────────────────────
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\grad}{\nabla}
+\newcommand{\T}{{\top}}
+\newcommand{\btheta}{\boldsymbol{\theta}}
+
+% ── Hyperref ─────────────────────────────────────────────────────────
+\hypersetup{
+    colorlinks = true,
+    linkcolor  = azulviz,
+    urlcolor   = azulviz,
+    citecolor  = azulviz
+}
+
+% ── Metadatos ────────────────────────────────────────────────────────
+\title{
+    {\Large\bfseries Más allá de la regresión lineal}\\[0.4em]
+    {\large Lo que cambia cuando el modelo cambia}\\[0.8em]
+    {\normalsize Notas de lectura para \textit{GradienViz}}
+}
+\author{
+    Departamento Académico de Sistemas Computacionales\\
+    Universidad Autónoma de Baja California Sur
+}
+\date{2026}
+
+% ─────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents
+\vspace{1em}
+
+\begin{vizadv}
+Este documento complementa los otros tres de la colección GradienViz.
+Se asume familiaridad con la regresión lineal simple y con la idea
+general del descenso por gradiente.
+\end{vizadv}
+
+% =============================================================================
+\section{El límite del ejemplo en clase}
+% =============================================================================
+
+La regresión lineal simple\textemdash ajustar una recta $y = mx + b$
+a un conjunto de puntos\textemdash es el punto de partida ideal para
+introducir la optimización. El modelo tiene exactamente dos parámetros,
+la función de costo es un paraboloide perfectamente convexo, y existe
+una fórmula analítica que lo resuelve en un paso.
+
+Pero los datos reales rara vez son lineales.
+
+\begin{itemize}
+    \item La concentración de una bacteria en un cultivo crece de forma
+    \textbf{exponencial} con el tiempo: $N(t) = N_0\,e^{rt}$.
+
+    \item La magnitud de un terremoto y la frecuencia con que ocurre
+    siguen una \textbf{ley de potencias}: $\log F = a - b\,M$
+    (ley de Gutenberg--Richter).
+
+    \item El precio de una vivienda depende simultáneamente de su
+    superficie, número de habitaciones, distancia al centro y decenas
+    de otras variables: \textbf{regresión múltiple}.
+
+    \item La probabilidad de que un correo sea spam dado su contenido
+    sigue un \textbf{modelo logístico}: $P = 1/(1 + e^{-\btheta^\T \mathbf{x}})$.
+\end{itemize}
+
+La pregunta que organiza este documento es: \textbf{¿qué cambia en el
+método cuando el modelo cambia?} La respuesta, según el nivel de análisis,
+va de ``todo'' a ``nada''.
+
+% =============================================================================
+\section{Modelos que se linealizan}
+% =============================================================================
+
+Una familia amplia de modelos no lineales admite una
+\textbf{linealización}: una transformación algebraica que los convierte
+en un problema de regresión lineal sobre variables nuevas.
+En esos casos, toda la maquinaria del álgebra lineal\textemdash
+ecuaciones normales, número de condición, descenso por gradiente\textemdash
+se reutiliza sin modificación.
+
+\subsection{Modelo exponencial}
+
+Supón que los datos sugieren $y = a\,e^{bx}$. Aplicando logaritmo natural:
+\[
+    \ln y = \ln a + b\,x.
+\]
+Definiendo $y' = \ln y$, $\alpha = \ln a$ y $\beta = b$, el modelo se
+convierte en:
+\[
+    y' = \alpha + \beta x,
+\]
+que es regresión lineal sobre las variables transformadas $(x,\, \ln y)$.
+La matriz de diseño y las ecuaciones normales son idénticas al caso base:
+\[
+    \mathbf{A} = \begin{pmatrix} x_1 & 1 \\ \vdots & \vdots \\ x_n & 1 \end{pmatrix},
+    \qquad
+    \mathbf{A}^\T\mathbf{A}\,\btheta^* = \mathbf{A}^\T\mathbf{b}',
+    \quad \btheta^* = (\beta,\, \alpha)^\T.
+\]
+Una vez obtenidos $\alpha$ y $\beta$, se recuperan los parámetros
+originales: $b = \beta$, $a = e^{\alpha}$.
+
+\subsection{Modelo potencial}
+
+El modelo $y = a\,x^b$ (frecuente en alometría, sismología, economía)
+se linealiza aplicando logaritmo a ambos lados:
+\[
+    \ln y = \ln a + b\,\ln x.
+\]
+Ahora tanto $x$ como $y$ aparecen en escala logarítmica. La variable
+predictora pasa a ser $x' = \ln x$ y la respuesta $y' = \ln y$:
+misma matriz $\mathbf{A}$, misma ecuación normal, dos parámetros.
+
+\subsection{Regresión polinomial}
+
+El modelo $y = \beta_0 + \beta_1 x + \beta_2 x^2 + \cdots + \beta_k x^k$
+parece no lineal, pero \emph{es lineal en los parámetros} $\beta_j$.
+Basta agregar columnas a $\mathbf{A}$:
+\[
+    \mathbf{A} = \begin{pmatrix}
+        1 & x_1 & x_1^2 & \cdots & x_1^k \\
+        1 & x_2 & x_2^2 & \cdots & x_2^k \\
+        \vdots & & & & \vdots \\
+        1 & x_n & x_n^2 & \cdots & x_n^k
+    \end{pmatrix} \in \R^{n \times (k+1)}.
+\]
+La ecuación normal $\mathbf{A}^\T\mathbf{A}\,\btheta^* = \mathbf{A}^\T\mathbf{b}$
+sigue siendo la misma expresión; ahora $\btheta^* \in \R^{k+1}$.
+
+\subsection{Regresión múltiple}
+
+Con $p$ variables predictoras $x_1, \ldots, x_p$, el modelo es:
+\[
+    y = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \cdots + \beta_p x_p.
+\]
+La matriz de diseño crece en columnas:
+\[
+    \mathbf{A} = \begin{pmatrix}
+        1 & x_{11} & x_{12} & \cdots & x_{1p} \\
+        1 & x_{21} & x_{22} & \cdots & x_{2p} \\
+        \vdots & & & & \vdots \\
+        1 & x_{n1} & x_{n2} & \cdots & x_{np}
+    \end{pmatrix} \in \R^{n \times (p+1)},
+\]
+y la ecuación normal permanece inalterada: $\mathbf{A}^\T\mathbf{A}\,\btheta^* = \mathbf{A}^\T\mathbf{b}$,
+con $\btheta^* \in \R^{p+1}$.
+
+\begin{vizdef}
+\textbf{Patrón unificador.} En todos los modelos linealizables, el método
+se reduce a elegir las columnas adecuadas para $\mathbf{A}$ (variables originales,
+transformadas, potencias, productos cruzados) y resolver \emph{siempre la
+misma ecuación normal}. El álgebra lineal absorbe la generalización; el
+cálculo tendría que rehacer todo el análisis para cada modelo nuevo.
+\end{vizdef}
+
+\subsection{Lo que sí cambia: la dimensión y el condicionamiento}
+
+Al pasar de 2 parámetros a $p+1$, el espacio de parámetros pasa de
+$\R^2$ a $\R^{p+1}$: ya no es visualizable directamente. Lo que
+GradienViz muestra en el Panel~2 como un plano con un punto $\oplus$
+se convierte en un hiperplano en alta dimensión con un punto mínimo.
+
+La geometría del bowl\textemdash convexa, con un único mínimo global\textemdash
+se conserva, pero el número de condición $\kappa(\mathbf{A}^\T\mathbf{A})$
+puede crecer drásticamente cuando las columnas de $\mathbf{A}$ están
+correlacionadas (multicolinealidad). El Panel~1 de GradienViz ilustra
+con dos variables la misma degradación que ocurre en alta dimensión.
+
+\begin{viznota}{Panel~2}
+El heatmap y las trayectorias que ves son una ventana al caso $p=1$.
+Para regresión múltiple con $p > 2$, la visualización directa es imposible,
+pero el bowl de $J$ sigue siendo cuadrático y convexo. Lo que cambia
+es solo el número de columnas de $\mathbf{A}$, no la ecuación que lo define.
+\end{viznota}
+
+% =============================================================================
+\section{Modelos que no se linealizan}
+% =============================================================================
+
+No todos los modelos admiten linealización. Los dos casos más importantes
+en aprendizaje automático son:
+
+\textbf{Regresión logística.} La probabilidad de pertenecer a una clase
+se modela como:
+\[
+    P(y=1 \mid \mathbf{x}) = \sigma(\btheta^\T \mathbf{x})
+    = \frac{1}{1 + e^{-\btheta^\T \mathbf{x}}}.
+\]
+La función de costo (entropía cruzada) no es cuadrática en $\btheta$.
+No existe fórmula cerrada análoga a las ecuaciones normales. El descenso
+por gradiente deja de ser pedagógicamente motivado y se convierte en el
+\emph{único} método práctico disponible.
+
+\textbf{Redes neuronales.} Componen múltiples transformaciones no lineales.
+La función de costo tiene mínimos locales, puntos de silla y regiones
+planas extendidas. La ecuación normal no existe. El descenso por gradiente\textemdash
+con el gradiente calculado mediante retropropagación\textemdash es el
+algoritmo universal de entrenamiento.
+
+\begin{vizadv}
+La frontera entre modelos linealizables y no linealizables no es estética:
+define si existe o no una solución analítica. En el lado linealizable,
+el descenso por gradiente es una elección; en el lado no linealizable,
+es una necesidad.
+\end{vizadv}
+
+% =============================================================================
+\section{Lo que no cambia: la iteración}
+% =============================================================================
+
+A pesar de toda la variedad de modelos, funciones de costo y espacios
+de parámetros, la regla de actualización del descenso por gradiente es
+siempre la misma:
+
+\begin{vizdef}
+\textbf{Regla universal.} Sea $\btheta \in \R^p$ el vector de parámetros
+del modelo y $J(\btheta)$ cualquier función de costo diferenciable.
+La iteración de descenso por gradiente es:
+\begin{equation}\label{eq:universal}
+    \btheta^{(t+1)} = \btheta^{(t)} - \eta\,\grad J\!\left(\btheta^{(t)}\right),
+\end{equation}
+independientemente de si el modelo es lineal, exponencial, polinomial,
+logístico o una red neuronal profunda.
+\end{vizdef}
+
+Lo que varía de un modelo a otro es únicamente la expresión de
+$\grad J(\btheta)$: cómo se calcula ese vector en cada caso.
+Para modelos lineales es una multiplicación de matrices; para redes
+neuronales, la retropropagación. Pero la forma de~\eqref{eq:universal}
+no se toca.
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+    \toprule
+    \textbf{Modelo} & \textbf{Parámetros} & \textbf{¿Linealizable?} & \textbf{$\grad J$} \\
+    \midrule
+    Lineal $y = mx + b$          & 2        & —          & Fórmula directa \\
+    Exponencial $y = ae^{bx}$    & 2        & Sí ($\ln$) & Fórmula directa \\
+    Potencial $y = ax^b$         & 2        & Sí ($\ln$) & Fórmula directa \\
+    Polinomial grado $k$         & $k+1$    & Sí         & Fórmula directa \\
+    Múltiple $p$ predictores     & $p+1$    & Sí         & Multiplicación matricial \\
+    Logístico                    & $p+1$    & No         & Fórmula directa \\
+    Red neuronal $2\to 4\to 1$   & 17       & No         & Retropropagación \\
+    Red neuronal profunda        & $10^{9}$ & No         & Retropropagación \\
+    \bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+
+GradienViz muestra la fila más sencilla de esa tabla. Lo que el
+visualizador hace visible\textemdash trayectorias que siguen el gradiente
+negativo hacia un mínimo\textemdash es el mismo proceso que ocurre,
+invisible y en miles de millones de dimensiones, cada vez que se entrena
+un modelo de lenguaje, un sistema de reconocimiento de imágenes o un
+motor de recomendación.
+
+La regresión lineal no es el destino. Es la única situación donde el
+destino se puede ver.
+
+\end{document}

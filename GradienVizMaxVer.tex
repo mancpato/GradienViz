@@ -1,0 +1,368 @@
+\documentclass[12pt, a4paper]{article}
+
+% ── Paquetes ─────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% babel-spanish no disponible en esta instalación
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+% ── Geometría ────────────────────────────────────────────────────────
+\geometry{
+    top    = 2.5cm,
+    bottom = 2.5cm,
+    left   = 3.0cm,
+    right  = 3.0cm
+}
+
+% ── Colores ──────────────────────────────────────────────────────────
+\definecolor{azulviz}{RGB}{37, 99, 235}
+\definecolor{naranjviz}{RGB}{251, 146, 60}
+\definecolor{verdviz}{RGB}{52, 211, 153}
+\definecolor{amarillviz}{RGB}{251, 191, 36}
+\definecolor{fondocaja}{RGB}{240, 245, 255}
+\definecolor{bordecruz}{RGB}{37, 99, 235}
+\definecolor{fondoadv}{RGB}{255, 248, 230}
+\definecolor{bordeadv}{RGB}{251, 146, 60}
+\definecolor{fondoteo}{RGB}{235, 250, 242}
+\definecolor{bordeteo}{RGB}{52, 153, 110}
+
+% ── Entornos ─────────────────────────────────────────────────────────
+\mdfdefinestyle{vizverde}{
+    backgroundcolor = fondoteo,
+    linecolor       = bordeteo,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\mdfdefinestyle{viznaranja}{
+    backgroundcolor = fondoadv,
+    linecolor       = bordeadv,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\mdfdefinestyle{vizazul}{
+    backgroundcolor = fondocaja,
+    linecolor       = bordecruz,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\newenvironment{viznota}[1]{%
+    \begin{mdframed}[style=vizverde]
+    \textbf{\color{bordeteo}En GradienViz \textemdash\ #1.}\quad
+}{%
+    \end{mdframed}
+}
+
+\newenvironment{vizadv}{%
+    \begin{mdframed}[style=viznaranja]
+    \textbf{\color{bordeadv}Atención:}\quad
+}{%
+    \end{mdframed}
+}
+
+\newenvironment{vizdef}{%
+    \begin{mdframed}[style=vizazul]
+}{%
+    \end{mdframed}
+}
+
+% ── Comandos matemáticos ─────────────────────────────────────────────
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\grad}{\nabla}
+\newcommand{\T}{{\top}}
+\newcommand{\btheta}{\boldsymbol{\theta}}
+\newcommand{\mstar}{m^{*}}
+\newcommand{\bstar}{b^{*}}
+
+% ── Hyperref ─────────────────────────────────────────────────────────
+\hypersetup{
+    colorlinks = true,
+    linkcolor  = azulviz,
+    urlcolor   = azulviz,
+    citecolor  = azulviz
+}
+
+% ── Metadatos ────────────────────────────────────────────────────────
+\title{
+    {\Large\bfseries ¿Por qué el error cuadrático medio?}\\[0.4em]
+    {\large Regresión lineal como máxima verosimilitud}\\[0.8em]
+    {\normalsize Notas de lectura para \textit{GradienViz}}
+}
+\author{
+    Departamento Académico de Sistemas Computacionales\\
+    Universidad Autónoma de Baja California Sur
+}
+\date{2026}
+
+% ─────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents
+\vspace{1em}
+
+\begin{vizadv}
+Este documento complementa los otros de la colección GradienViz.
+Se asume familiaridad con la función de densidad normal (gaussiana),
+con logaritmos y con la idea general del descenso por gradiente.
+\end{vizadv}
+
+% =============================================================================
+\section{Una pregunta incómoda}
+% =============================================================================
+
+Los otros documentos de esta colección toman el error cuadrático medio
+como punto de partida:
+\[
+    J(m, b) = \frac{1}{n}\sum_{i=1}^{n}(m x_i + b - y_i)^2.
+\]
+Pero no dicen por qué. ¿Por qué elevar al cuadrado?
+¿Por qué no usar el error absoluto $|m x_i + b - y_i|$,
+el error cúbico, o simplemente la suma de errores sin valor absoluto?
+
+Todas esas funciones miden, en algún sentido, qué tan lejos está la
+recta de los datos. Sin embargo, solo una de ellas tiene una justificación
+estadística precisa bajo supuestos explícitos sobre cómo se generaron
+los datos. Este documento desarrolla esa justificación.
+
+La respuesta corta: \textbf{el error cuadrático medio es la función
+de costo natural cuando el ruido en los datos es gaussiano}.
+Minimizarlo equivale a maximizar la probabilidad de haber observado
+exactamente los datos que tenemos.
+
+% =============================================================================
+\section{El modelo probabilista}
+% =============================================================================
+
+En los otros documentos, los datos $(x_i, y_i)$ simplemente existen.
+Aquí los modelamos como el resultado de un proceso aleatorio.
+
+\subsection{El supuesto de ruido gaussiano}
+
+Asumimos que cada observación $y_i$ se generó así:
+\begin{equation}\label{eq:modelo}
+    y_i = m x_i + b + \varepsilon_i,
+    \qquad \varepsilon_i \overset{\text{iid}}{\sim} \mathcal{N}(0, \sigma^2),
+\end{equation}
+donde $\varepsilon_i$ es un término de ruido aleatorio, independiente
+e idénticamente distribuido según una distribución normal de media cero
+y varianza $\sigma^2$.
+
+Este supuesto tiene una interpretación física directa: la recta $y = mx + b$
+describe la tendencia real, y $\varepsilon_i$ captura todo lo demás\textemdash
+errores de medición, variables no incluidas en el modelo, variabilidad
+inherente del fenómeno. Asumir que ese ruido es gaussiano, centrado en
+cero y de varianza constante, es la hipótesis más común y más estudiada
+en estadística.
+
+\subsection{La verosimilitud de una observación}
+
+Bajo el modelo~\eqref{eq:modelo}, dado un par de parámetros $(m, b)$,
+cada observación $y_i$ sigue una distribución normal con media $mx_i + b$
+y varianza $\sigma^2$:
+\[
+    y_i \mid x_i,\, m,\, b \;\sim\; \mathcal{N}(mx_i + b,\; \sigma^2).
+\]
+Su función de densidad es:
+\begin{equation}\label{eq:densidad}
+    f(y_i \mid x_i, m, b) = \frac{1}{\sigma\sqrt{2\pi}}
+    \exp\!\left(-\frac{(y_i - mx_i - b)^2}{2\sigma^2}\right).
+\end{equation}
+
+\subsection{La función de verosimilitud}
+
+La \textbf{verosimilitud} $L(m, b)$ mide qué tan probable es haber
+observado \emph{todos} los datos $(x_1, y_1), \ldots, (x_n, y_n)$
+si los parámetros verdaderos fueran $(m, b)$. Por independencia de
+las observaciones, es el producto de las densidades individuales:
+\begin{equation}\label{eq:likelihood}
+    L(m, b) = \prod_{i=1}^{n} f(y_i \mid x_i, m, b)
+    = \prod_{i=1}^{n} \frac{1}{\sigma\sqrt{2\pi}}
+      \exp\!\left(-\frac{(y_i - mx_i - b)^2}{2\sigma^2}\right).
+\end{equation}
+
+El \textbf{estimador de máxima verosimilitud} (EMV) es el par $(m, b)$
+que maximiza $L(m, b)$: los parámetros que hacen más probable haber
+obtenido exactamente los datos observados.
+
+\begin{viznota}{Panel~1}
+Cada punto azul $(x_i, y_i)$ es una realización del modelo~\eqref{eq:modelo}.
+La distancia vertical de cada punto a la recta naranja es el residuo
+$e_i = y_i - (mx_i + b)$, que bajo el modelo es una realización de
+$\varepsilon_i \sim \mathcal{N}(0, \sigma^2)$. Residuos grandes son
+improbables bajo una gaussiana; el EMV los penaliza cuadráticamente.
+\end{viznota}
+
+% =============================================================================
+\section{Maximizar \texorpdfstring{$L$}{L} equivale a minimizar MSE}
+% =============================================================================
+
+Trabajar directamente con el producto~\eqref{eq:likelihood} es
+inconveniente: productos de exponenciales son difíciles de derivar.
+La solución estándar es tomar logaritmo. Como el logaritmo es una
+función estrictamente creciente, maximizar $L$ y maximizar
+$\ell = \ln L$ tienen exactamente el mismo argumento óptimo.
+
+\subsection{La log-verosimilitud}
+
+Aplicando $\ln$ a~\eqref{eq:likelihood}:
+\begin{align}
+    \ell(m, b) &= \ln L(m, b)
+    = \sum_{i=1}^{n} \ln f(y_i \mid x_i, m, b) \notag\\
+    &= \sum_{i=1}^{n} \left[
+        -\ln(\sigma\sqrt{2\pi})
+        - \frac{(y_i - mx_i - b)^2}{2\sigma^2}
+    \right] \notag\\
+    &= -n\ln(\sigma\sqrt{2\pi})
+       - \frac{1}{2\sigma^2}\sum_{i=1}^{n}(y_i - mx_i - b)^2.
+    \label{eq:loglik}
+\end{align}
+
+\subsection{El resultado central}
+
+En~\eqref{eq:loglik}, el primer término $-n\ln(\sigma\sqrt{2\pi})$
+es una constante que no depende de $(m, b)$. El segundo término es
+$-\frac{1}{2\sigma^2}\sum_{i=1}^n (y_i - mx_i - b)^2$, que tampoco
+depende de $\sigma$ en cuanto a su argumento óptimo.
+
+Por lo tanto:
+\[
+    \underbrace{\arg\max_{m,b}\; \ell(m,b)}_{\text{máxima verosimilitud}}
+    \;=\;
+    \arg\max_{m,b}\left[-\sum_{i=1}^{n}(y_i - mx_i - b)^2\right]
+    \;=\;
+    \underbrace{\arg\min_{m,b}\;\frac{1}{n}\sum_{i=1}^{n}(y_i - mx_i - b)^2}_{\text{mínimos cuadrados}}.
+\]
+
+\begin{vizdef}
+\textbf{Equivalencia fundamental.} Bajo el supuesto de ruido gaussiano
+independiente e idénticamente distribuido, el estimador de máxima
+verosimilitud y el estimador de mínimos cuadrados son idénticos:
+\[
+    (\mstar, \bstar) = \arg\max_{m,b} L(m,b) = \arg\min_{m,b} J(m,b).
+\]
+Minimizar el error cuadrático medio no es una elección arbitraria:
+es la consecuencia directa de asumir ruido gaussiano.
+\end{vizdef}
+
+\begin{viznota}{Panel~2, punto $\oplus$}
+La cruz amarilla marca $(\mstar, \bstar)$: el mínimo de $J(m,b)$.
+Por la equivalencia anterior, ese mismo punto es también el máximo
+de la verosimilitud $L(m,b)$ bajo el modelo gaussiano. Es el punto
+que hace más probable haber observado los datos del Panel~1.
+\end{viznota}
+
+% =============================================================================
+\section{Cambia el ruido, cambia la función de costo}
+% =============================================================================
+
+La derivación anterior revela algo más profundo: el MSE no es
+universal. Es la función de costo correcta \emph{para el ruido gaussiano}.
+Si el mecanismo que genera los errores es distinto, la función de costo
+que maximiza la verosimilitud también lo es.
+
+\subsection{Ruido de Laplace: el error absoluto medio}
+
+Si en lugar de $\varepsilon_i \sim \mathcal{N}(0, \sigma^2)$ asumimos
+$\varepsilon_i \sim \text{Laplace}(0, b)$, cuya densidad es
+$f(\varepsilon) = \frac{1}{2b}e^{-|\varepsilon|/b}$, entonces la
+log-verosimilitud resulta proporcional a $-\sum_i |y_i - mx_i - b|$.
+El estimador de máxima verosimilitud minimiza el
+\textbf{error absoluto medio} (MAE):
+\[
+    J_{\text{MAE}}(m, b) = \frac{1}{n}\sum_{i=1}^{n}|y_i - mx_i - b|.
+\]
+El MAE es más robusto ante valores atípicos (\emph{outliers}) que el MSE,
+precisamente porque la distribución de Laplace asigna mayor probabilidad
+a errores grandes que la gaussiana.
+
+\subsection{Modelo de clasificación binaria: la entropía cruzada}
+
+En clasificación, $y_i \in \{0, 1\}$ y el modelo predice una
+probabilidad $\hat{p}_i = \sigma(\btheta^\T \mathbf{x}_i) \in (0,1)$.
+Cada $y_i$ sigue una distribución de Bernoulli con parámetro $\hat{p}_i$.
+La log-verosimilitud negativa de este modelo es la
+\textbf{entropía cruzada binaria}:
+\[
+    J_{\text{CE}}(\btheta) = -\frac{1}{n}\sum_{i=1}^{n}
+    \bigl[y_i \ln \hat{p}_i + (1 - y_i)\ln(1 - \hat{p}_i)\bigr].
+\]
+Esta es exactamente la función de costo que minimiza el descenso por
+gradiente en regresión logística y en la capa de salida de una red
+neuronal para clasificación.
+
+\subsection{El origen estadístico de las funciones de costo}
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+    \toprule
+    \textbf{Supuesto de ruido} & \textbf{Distribución} &
+    \textbf{Función de costo} & \textbf{Uso típico} \\
+    \midrule
+    Gaussiano   & $\mathcal{N}(0,\sigma^2)$   & MSE (error cuadrático)  & Regresión \\
+    Laplace     & $\text{Laplace}(0,b)$       & MAE (error absoluto)    & Regresión robusta \\
+    Bernoulli   & $\text{Bernoulli}(\hat{p})$ & Entropía cruzada binaria & Clasificación binaria \\
+    Categórica  & $\text{Categorical}(\hat{p})$ & Entropía cruzada       & Clasificación múltiple \\
+    \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{vizadv}
+En la práctica, elegir una función de costo equivale a elegir un
+supuesto sobre la distribución del ruido. Cuando un modelo de
+aprendizaje automático usa entropía cruzada en lugar de MSE, no es
+por conveniencia computacional: es porque el problema tiene estructura
+de clasificación (ruido de Bernoulli) en lugar de regresión (ruido
+gaussiano). La función de costo codifica una hipótesis estadística
+sobre los datos.
+\end{vizadv}
+
+% =============================================================================
+\section*{Resumen}
+% =============================================================================
+
+El error cuadrático medio no es una elección arbitraria.
+Es la función de costo que emerge naturalmente cuando se asume que
+los errores del modelo siguen una distribución gaussiana centrada en
+cero: minimizar MSE equivale a encontrar los parámetros que maximizan
+la verosimilitud de los datos observados bajo ese supuesto.
+
+La cruz $\oplus$ que GradienViz marca en el Panel~2 tiene, por lo
+tanto, dos lecturas simultáneas y equivalentes:
+el mínimo de la función de costo $J(m,b)$ y
+el máximo de la verosimilitud $L(m,b)$.
+
+Cambiar el supuesto de ruido cambia la función de costo, pero no
+cambia el método: el descenso por gradiente sigue siendo el algoritmo
+que minimiza cualquiera de ellas.
+
+\end{document}

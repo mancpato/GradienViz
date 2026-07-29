@@ -1,0 +1,353 @@
+﻿\documentclass[12pt, a4paper]{article}
+
+% ── Paquetes ─────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% babel-spanish no disponible en esta instalación
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+% ── Geometría ────────────────────────────────────────────────────────
+\geometry{
+    top    = 2.5cm,
+    bottom = 2.5cm,
+    left   = 3.0cm,
+    right  = 3.0cm
+}
+
+% ── Colores ──────────────────────────────────────────────────────────
+\definecolor{azulviz}{RGB}{37, 99, 235}
+\definecolor{naranjviz}{RGB}{251, 146, 60}
+\definecolor{verdviz}{RGB}{52, 211, 153}
+\definecolor{amarillviz}{RGB}{251, 191, 36}
+\definecolor{fondocaja}{RGB}{240, 245, 255}
+\definecolor{bordecruz}{RGB}{37, 99, 235}
+\definecolor{fondoadv}{RGB}{255, 248, 230}
+\definecolor{bordeadv}{RGB}{251, 146, 60}
+\definecolor{fondoteo}{RGB}{235, 250, 242}
+\definecolor{bordeteo}{RGB}{52, 153, 110}
+
+% ── Entornos ─────────────────────────────────────────────────────────
+\mdfdefinestyle{vizverde}{
+    backgroundcolor = fondoteo,
+    linecolor       = bordeteo,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\mdfdefinestyle{viznaranja}{
+    backgroundcolor = fondoadv,
+    linecolor       = bordeadv,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\mdfdefinestyle{vizazul}{
+    backgroundcolor = fondocaja,
+    linecolor       = bordecruz,
+    linewidth       = 1.5pt,
+    leftmargin      = 0pt,
+    rightmargin     = 0pt,
+    innertopmargin  = 8pt,
+    innerbottommargin = 8pt,
+    innerleftmargin  = 12pt,
+    innerrightmargin = 12pt,
+    roundcorner     = 4pt
+}
+
+\newenvironment{viznota}[1]{%
+    \begin{mdframed}[style=vizverde]
+    \textbf{\color{bordeteo}En GradienViz \textemdash\ #1.}\quad
+}{%
+    \end{mdframed}
+}
+
+\newenvironment{vizadv}{%
+    \begin{mdframed}[style=viznaranja]
+    \textbf{\color{bordeadv}Atención:}\quad
+}{%
+    \end{mdframed}
+}
+
+\newenvironment{vizdef}{%
+    \begin{mdframed}[style=vizazul]
+}{%
+    \end{mdframed}
+}
+
+% ── Comandos matemáticos ─────────────────────────────────────────────
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\grad}{\nabla}
+\newcommand{\mstar}{m^{*}}
+\newcommand{\bstar}{b^{*}}
+\newcommand{\Jfun}{J(m,b)}
+\newcommand{\AtA}{\mathbf{A}^{\top}\mathbf{A}}
+\newcommand{\Atb}{\mathbf{A}^{\top}\mathbf{b}}
+\newcommand{\T}{{\top}}
+
+% ── Hyperref ─────────────────────────────────────────────────────────
+\hypersetup{
+    colorlinks = true,
+    linkcolor  = azulviz,
+    urlcolor   = azulviz,
+    citecolor  = azulviz
+}
+
+% ── Metadatos ────────────────────────────────────────────────────────
+\title{
+    {\Large\bfseries Regresión lineal y proyección ortogonal}\\[0.4em]
+    {\large Del sistema incompatible $Ax = b$ a las ecuaciones normales $A'Ax = A'b$}\\[0.8em]
+    {\normalsize Notas de lectura para \textit{GradienViz}}
+}
+\author{
+    Departamento Académico de Sistemas Computacionales\\
+    Universidad Autónoma de Baja California Sur
+}
+\date{2026}
+
+% ──────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents
+\vspace{1em}
+
+\begin{vizadv}
+Este documento asume familiaridad con álgebra lineal matricial (espacios vectoriales, subespacios, producto escalar, ortogonalidad y solución de sistemas de ecuaciones lineales). Se recomienda tener abierto \textbf{GradienViz} mientras se lee.
+\end{vizadv}
+
+\section{El problema de ajuste desde el Álgebra Lineal}
+
+Supongamos que tenemos $n$ puntos observados $(x_i, y_i) \in \R^2$ para $i = 1, \ldots, n$, y deseamos encontrar una recta $y = mx + b$ que pase exactamente por todos ellos. Esto equivale a plantear el siguiente sistema de $n$ ecuaciones lineales con 2 incógnitas, el vector $\mathbf{x} = (m, b)^\T$:
+\[
+    \begin{cases}
+        m x_1 + b = y_1 \\
+        m x_2 + b = y_2 \\
+        \quad \vdots \\
+        m x_n + b = y_n
+    \end{cases}
+\]
+En notación matricial, usando la convención estándar (y equivalente a la notación de MATLAB \texttt{A*x = b}), escribimos:
+\begin{equation}\label{eq:sistema_incompatible}
+    \mathbf{A}\mathbf{x} = \mathbf{b},
+\end{equation}
+donde la matriz de diseño $\mathbf{A} \in \R^{n \times 2}$ y el vector de observaciones $\mathbf{b} \in \R^n$ están dados por:
+
+\begin{vizadv}
+El vector $\mathbf{b} \in \R^n$ de observaciones no debe confundirse con el parámetro escalar $b$ (intercepto de la recta). La tipografía los distingue: $\mathbf{b}$ en negrita es el vector de datos; $b$ en redonda es el parámetro a determinar.
+\end{vizadv}
+\[
+    \mathbf{A} = \begin{pmatrix}
+        x_1 & 1 \\
+        x_2 & 1 \\
+        \vdots & \vdots \\
+        x_n & 1
+    \end{pmatrix}, \qquad
+    \mathbf{x} = \begin{pmatrix}
+        m \\ b
+    \end{pmatrix}, \qquad
+    \mathbf{b} = \begin{pmatrix}
+        y_1 \\ y_2 \\ \vdots \\ y_n
+    \end{pmatrix}.
+\]
+
+\subsection{El dilema de la incompatibilidad}
+
+Cuando $n > 2$ y los puntos no son estrictamente colineales, el vector $\mathbf{b}$ \textbf{no pertenece} al espacio columna de $\mathbf{A}$, denotado $\operatorname{Col}(\mathbf{A}) \subset \R^n$. Por lo tanto, el sistema~\eqref{eq:sistema_incompatible} es \textbf{incompatible} (no tiene solución exacta).
+
+El objetivo del Álgebra Lineal no es rendirse ante la falta de solución, sino buscar la \emph{mejor aproximación posible}: un vector $\mathbf{x}^* = (\mstar, \bstar)^\T$ tal que el vector transformado $\mathbf{A}\mathbf{x}^* \in \operatorname{Col}(\mathbf{A})$ se encuentre lo más cerca posible de $\mathbf{b}$ en términos de la norma euclidiana $\|\mathbf{b} - \mathbf{A}\mathbf{x}\|$.
+
+\begin{viznota}{Panel~1}
+La recta gris punteada es $y = \mstar x + \bstar$. Cada punto $y_i$ difiere de la recta por un residuo $e_i = y_i - (\mstar x_i + \bstar)$, que es una diferencia \emph{vertical} en el plano de datos $[0,1]^2$. El vector $\mathbf{e} = (e_1, \ldots, e_n)^\T = \mathbf{b} - \mathbf{A}\mathbf{x}^* \in \R^n$ recoge esos residuos y resulta ser ortogonal a $\operatorname{Col}(\mathbf{A})$ en $\R^n$. Son dos perpedicularidades en dos espacios distintos: la primera, visual en el plano; la segunda, algebraica en $\R^n$.
+\end{viznota}
+
+\section{Geometría de la Proyección Ortogonal y Ecuaciones Normales}
+
+El subespacio $\operatorname{Col}(\mathbf{A})$ es un plano (de dimensión a lo más 2) dentro del espacio $\R^n$. El vector $\mathbf{b}$ está ``flotando'' fuera de ese plano. El teorema de la mejor aproximación en espacios con producto interno establece que la distancia $\|\mathbf{b} - \mathbf{A}\mathbf{x}\|$ se minimiza si y solo si el vector de error o residuo
+\[
+    \mathbf{e} = \mathbf{b} - \mathbf{A}\mathbf{x}^*
+\]
+es \textbf{ortogonal} a todo el subespacio $\operatorname{Col}(\mathbf{A})$.
+
+\subsection{Derivación de las Ecuaciones Normales (\texttt{A'*A*x = A'*b})}
+
+Para que $\mathbf{e}$ sea ortogonal a $\operatorname{Col}(\mathbf{A})$, debe ser ortogonal a cada una de las columnas de $\mathbf{A}$. En forma matricial, esto se expresa multiplicando por la transpuesta $\mathbf{A}^\T$ (escrita como \texttt{A'} en notación de MATLAB):
+\[
+    \mathbf{A}^\T \mathbf{e} = \mathbf{0}
+    \implies \mathbf{A}^\T (\mathbf{b} - \mathbf{A}\mathbf{x}^*) = \mathbf{0}.
+\]
+Distribuyendo $\mathbf{A}^\T$, llegamos al célebre sistema de \textbf{Ecuaciones Normales}:
+\begin{equation}\label{eq:ecuaciones_normales}
+    \mathbf{A}^\T \mathbf{A} \mathbf{x}^* = \mathbf{A}^\T \mathbf{b}
+    \quad \text{(en MATLAB: \texttt{A'*A*x = A'*b})}.
+\end{equation}
+
+Si las columnas de $\mathbf{A}$ son linealmente independientes (lo cual ocurre siempre que haya al menos dos valores de $x_i$ distintos), la matriz de Gram $\mathbf{A}^\T \mathbf{A} \in \R^{2 \times 2}$ es invertible y estrictamente definida positiva. Por lo tanto, la solución única es:
+\begin{equation}\label{eq:sol_matriz}
+    \mathbf{x}^* = (\mathbf{A}^\T \mathbf{A})^{-1} \mathbf{A}^\T \mathbf{b}.
+\end{equation}
+
+\subsection{Estructura explícita de \texttt{A'*A} y \texttt{A'*b}}
+
+Al desarrollar explícitamente los productos matriciales para el caso $2 \times 2$:
+\[
+    \mathbf{A}^\T \mathbf{A} = \begin{pmatrix}
+        \sum x_i^2 & \sum x_i \\
+        \sum x_i   & n
+    \end{pmatrix}
+    = \begin{pmatrix}
+        S_{x^2} & S_x \\
+        S_x     & n
+    \end{pmatrix}, \qquad
+    \mathbf{A}^\T \mathbf{b} = \begin{pmatrix}
+        \sum x_i y_i \\ \sum y_i
+    \end{pmatrix}
+    = \begin{pmatrix}
+        S_{xy} \\ S_y
+    \end{pmatrix}.
+\]
+Al resolver el sistema $2 \times 2$ mediante la regla de Cramer o inversión explícita, se recuperan exactamente las fórmulas escalares conocidas para $\mstar$ y $\bstar$:
+\[
+    \mstar = \frac{n S_{xy} - S_x S_y}{n S_{x^2} - S_x^2}, \qquad
+    \bstar = \frac{S_y - \mstar S_x}{n}.
+\]
+
+\begin{viznota}{Panel~2, punto amarillo $\oplus$}
+El punto óptimo $(\mstar, \bstar)$ es la solución única del sistema $2\times 2$ simétrico y definido positivo $\mathbf{A}^\T \mathbf{A}\,\mathbf{x}^* = \mathbf{A}^\T \mathbf{b}$. Su posición en el plano $(m, b)$ es independiente del algoritmo: existe antes de que comience cualquier iteración.
+\end{viznota}
+
+\section{La función cuadrática de costo y el operador $\mathbf{A}^\T \mathbf{A}$}
+
+La norma al cuadrado del residuo dividida entre $n$ define la función de error cuadrático medio:
+\[
+    J(\mathbf{x}) = \frac{1}{n} \|\mathbf{A}\mathbf{x} - \mathbf{b}\|^2
+    = \frac{1}{n} (\mathbf{A}\mathbf{x} - \mathbf{b})^\T (\mathbf{A}\mathbf{x} - \mathbf{b}).
+\]
+Expandiendo la forma cuadrática:
+\[
+    J(\mathbf{x}) = \frac{1}{n} \left(
+        \mathbf{x}^\T (\mathbf{A}^\T \mathbf{A}) \mathbf{x}
+        - 2 \mathbf{x}^\T \mathbf{A}^\T \mathbf{b}
+        + \mathbf{b}^\T \mathbf{b}
+    \right).
+\]
+El gradiente de esta función cuadrática en notación matricial directa es:
+\begin{equation}\label{eq:grad_matriz}
+    \grad J(\mathbf{x}) = \frac{2}{n} \left(
+        \mathbf{A}^\T \mathbf{A} \mathbf{x} - \mathbf{A}^\T \mathbf{b}
+    \right).
+\end{equation}
+
+\begin{vizdef}
+\textbf{Conexión fundamental.} El gradiente $\grad J(\mathbf{x})$ es cero si y solo si $\mathbf{A}^\T \mathbf{A} \mathbf{x} = \mathbf{A}^\T \mathbf{b}$. Es decir, \textbf{resolver las ecuaciones normales equivale a encontrar el punto estacionario donde el gradiente se anula}.
+\end{vizdef}
+
+\section{El algoritmo de descenso por gradiente matricial}
+
+\begin{vizadv}
+En regresión lineal simple, las ecuaciones normales forman un sistema $2\times 2$ que se resuelve trivialmente. El descenso por gradiente es aquí \textbf{pedagógicamente motivado}, no computacionalmente necesario: su utilidad real emerge cuando $\mathbf{A}^\T\mathbf{A}$ es de gran dimensión (miles a miles de millones de parámetros) y su inversión o factorización resulta inviable.
+\end{vizadv}
+
+Cuando el tamaño del sistema es masivo, calcular la inversa $(\mathbf{A}^\T \mathbf{A})^{-1}$ o realizar la descomposición QR/SVD puede ser computacionalmente costoso. El descenso por gradiente resuelve las ecuaciones normales de forma iterativa.
+
+\begin{vizdef}
+\textbf{Iteración de descenso por gradiente en notación matricial.} Partiendo de un vector inicial $\mathbf{x}^{(0)}$, la actualización en la iteración $t+1$ es:
+\begin{equation}\label{eq:update_matriz}
+    \mathbf{x}^{(t+1)} = \mathbf{x}^{(t)} - \eta \, \grad J(\mathbf{x}^{(t)})
+    = \mathbf{x}^{(t)} - \frac{2\eta}{n} \left(
+        \mathbf{A}^\T \mathbf{A} \mathbf{x}^{(t)} - \mathbf{A}^\T \mathbf{b}
+    \right).
+\end{equation}
+\end{vizdef}
+
+\begin{viznota}{Panel~2, trayectorias}
+Cada trayectoria visible es la secuencia $\mathbf{x}^{(0)}, \mathbf{x}^{(1)}, \mathbf{x}^{(2)}, \ldots$ generada por~\eqref{eq:update_matriz}. El color final de cada trayectoria indica qué tan cerca llegó $\mathbf{x}^{(t)}$ al óptimo $\mathbf{x}^*$: verde cuando la convergencia fue precisa, rojo cuando se detuvo lejos, gris cuando se agotó el límite de iteraciones.
+\end{viznota}
+
+Reorganizando términos:
+\[
+    \mathbf{x}^{(t+1)} = \left(
+        \mathbf{I} - \frac{2\eta}{n} \mathbf{A}^\T \mathbf{A}
+    \right) \mathbf{x}^{(t)} + \frac{2\eta}{n} \mathbf{A}^\T \mathbf{b}.
+\]
+Esta es una \textbf{iteración estacionaria de primer orden}. La matriz de iteración es $M = \mathbf{I} - \frac{2\eta}{n} \mathbf{A}^\T \mathbf{A}$.
+
+\section{Análisis de Eigenvalores y Condicionamiento Numérico}
+
+El comportamiento de la simulación en GradienViz depende completamente de las propiedades espectrales de la matriz de Gram $\mathbf{A}^\T \mathbf{A}$.
+
+\subsection{Condición de convergencia}
+
+Para que la iteración~\eqref{eq:update_matriz} converja a $\mathbf{x}^*$ desde cualquier punto inicial, el radio espectral de la matriz de iteración debe ser menor que 1: $\rho(M) < 1$. Esto se traduce directamente en la condición para la tasa de aprendizaje $\eta$:
+\[
+    \eta < \frac{n}{\lambda_{\max}(\mathbf{A}^\T \mathbf{A})},
+\]
+donde $\lambda_{\max}$ es el mayor eigenvalor de $\mathbf{A}^\T \mathbf{A}$.
+
+\begin{viznota}{slider $\eta$}
+El rango $[0.001,\, 0.5]$ del control de tasa de aprendizaje en GradienViz permite explorar ambos lados del umbral $\eta < n/\lambda_{\max}(\mathbf{A}^\T\mathbf{A})$. Para datos bien distribuidos el umbral suele estar alrededor de $\eta \approx 0.3$; para datos mal condicionados puede ser mucho menor.
+\end{viznota}
+
+\subsection{El número de condición $\kappa(\mathbf{A}^\T \mathbf{A})$}
+
+Sean $\lambda_1 \ge \lambda_2 > 0$ los eigenvalores de la matriz $2 \times 2$ $\mathbf{A}^\T \mathbf{A}$. El \textbf{número de condición} de la matriz es:
+\begin{equation}\label{eq:kappa_lin}
+    \kappa(\mathbf{A}^\T \mathbf{A}) = \frac{\lambda_1}{\lambda_2}.
+\end{equation}
+
+Geométricamente, $\kappa$ mide la excentricidad de las elipses de nivel de $J(\mathbf{x})$ en el Panel~2:
+\begin{itemize}
+    \item \textbf{$\kappa \approx 1$:} Las curvas de nivel son circunferencias casi perfectas. Los eigenvalores de $\mathbf{A}^\T\mathbf{A}$ son iguales, el gradiente apunta directo al óptimo y la convergencia es rápida.
+    \item \textbf{$\kappa \approx 100$:} Las elipses de nivel son moderadamente estiradas. El gradiente toma un camino oblicuo; la convergencia requiere más iteraciones pero sigue siendo robusta.
+    \item \textbf{$\kappa \gg 1000$:} Las curvas de nivel son elipses muy estiradas; $\lambda_2 \approx 0$ indica casi singularidad. El vector gradiente es casi ortogonal a la dirección hacia el mínimo, provocando un trayecto en ``zigzag'' severo o convergencia fallida dentro del límite de iteraciones.
+\end{itemize}
+
+\begin{viznota}{Panel~1, esquina superior derecha}
+Cuando colocas puntos alineados verticalmente, las columnas de $\mathbf{A} = \begin{pmatrix} \mathbf{x} & \mathbf{1} \end{pmatrix}$ se vuelven casi linealmente dependientes (puesto que $\mathbf{x} \approx c \mathbf{1}$). Esto provoca que $\lambda_2 \to 0$ y $\kappa \to \infty$. La matriz se vuelve casi singular y la proyección ortogonal pierde estabilidad numérica.
+\end{viznota}
+
+\section{Relación entre métodos directos e iterativos}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+    \toprule
+    & \textbf{Método Directo (\texttt{A'*A$\setminus$A'*b})} & \textbf{Descenso por Gradiente} \\
+    \midrule
+    Naturaleza              & Solución exacta en un paso       & Algoritmo iterativo paso a paso \\
+    Operación clave         & Inversión / Factorización de $\mathbf{A}^\T \mathbf{A}$ & Multiplicación matriz-vector $\mathbf{A}^\T \mathbf{A} \mathbf{x}$ \\
+    Complejidad             & $O(p^3)$ para $p$ parámetros     & $O(p^2)$ por iteración \\
+    Sensibilidad a $\kappa$ & Alta en sistemas mal condicionados & Velocidad de convergencia dependiente de $\kappa$ \\
+    Visualización           & Punto final $\oplus$ directo     & Trayectoria en el espacio de parámetros \\
+    \bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+
+\section*{Resumen}
+
+El problema de regresión lineal en Álgebra Lineal es la búsqueda de la proyección ortogonal del vector de observaciones $\mathbf{b}$ sobre el subespacio columna $\operatorname{Col}(\mathbf{A})$. Esta condición de ortogonalidad genera el sistema simétrico $A'Ax = A'b$.
+
+GradienViz propone una forma visual de entender la resolución iterativa de este sistema de ecuaciones normales: en lugar de resolverlo algebraicamente mediante eliminación gaussiana o inversión de $\mathbf{A}^\T\mathbf{A}$, el descenso por gradiente explora el espacio vectorial siguiendo la dirección del residuo transformado $\mathbf{A}^\T(\mathbf{b} - \mathbf{A}\mathbf{x}^{(t)})$ hasta encontrar la proyección óptima.
+
+\end{document}

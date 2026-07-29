@@ -4,9 +4,17 @@
 
 Herramienta pedagógica para cursos de inteligencia artificial, aprendizaje automático y optimización numérica. Implementada en p5.js como un único archivo HTML autocontenido — no requiere instalación ni servidor.
 
-Está acompañado de dos documentos en LaTeX:
-- **GradienVizMate.tex**, pensado para estudiantes de redes neuronales que ya cursaron las matemáticas necesarias (cálculo, álgebra lineal y estadística).
-- **GradienVizMateBasic.tex**, para estudiantes de cálculo diferencial.
+Está acompañado de cinco documentos en LaTeX que abordan el mismo problema desde perspectivas complementarias:
+
+| Documento | Perspectiva | Público |
+|---|---|---|
+| **GradienVizMateBasic.tex** | Cálculo diferencial | Estudiantes de primer semestre |
+| **GradienVizMate.tex** | Cálculo · Álgebra lineal · Estadística | Estudiantes de IA y aprendizaje automático |
+| **GradienVizAlgLin.tex** | Álgebra lineal y proyección ortogonal | Cursos de álgebra lineal |
+| **GradienVizMaxVer.tex** | Máxima verosimilitud | Cursos de estadística inferencial |
+| **GradienVizMasAlla.tex** | Generalización a otros modelos | Cualquier nivel, como cierre |
+
+Los cinco documentos comparten notación, formato y estilo. Pueden usarse de forma independiente o como colección progresiva.
 
 ---
 
@@ -57,6 +65,7 @@ Evolución del costo promedio sobre todas las trayectorias a lo largo de las ite
 | Arrastrar punto | Mueve el punto |
 | Ctrl+Click sobre punto | Elimina el punto |
 | Botón *Puntos aleatorios* | Genera entre 5 y 15 puntos aleatorios |
+| Botón *Perturbar* | Añade ruido aleatorio pequeño a las coordenadas x de los puntos |
 
 Cualquier cambio en los datos recalcula automáticamente la solución óptima y limpia las trayectorias anteriores.
 
@@ -90,6 +99,9 @@ Variar η permite observar tres regímenes:
 ### Mal condicionamiento
 Colocar los puntos casi en una línea vertical (x ≈ constante) produce κ(XᵀX) muy alto. El bowl de J(m,b) se alarga en la dirección de m y el descenso por gradiente puede requerir miles de iteraciones sin llegar al óptimo — ilustrando por qué los métodos de primer orden son sensibles al condicionamiento de los datos.
 
+### Recuperarse de un caso mal condicionado
+El botón *Perturbar* añade ruido aleatorio a las coordenadas x de los puntos, lo que aumenta su varianza y reduce κ(XᵀX) — sin alterar el modelo ni la función de costo, solo los datos. Es útil como demostración en vivo: entrenar con datos casi verticales (no converge), perturbar, y entrenar de nuevo (converge). Detalles matemáticos de por qué esta operación es preferible a regularizar la matriz artificialmente se documentan en `Perturb.md`.
+
 ### Paisaje de la función de costo
 El heatmap muestra que J(m,b) es una función cuadrática convexa — siempre tiene un único mínimo global. El campo vectorial muestra que las flechas apuntan siempre hacia ese mínimo, independientemente del punto de partida.
 
@@ -116,4 +128,4 @@ Forma parte de una colección de herramientas de visualización pedagógica impl
 ## Elaborado por
 
 *Miguel Ángel Norzagaray Cosío*, DASC/UABCS — concepción, diseño pedagógico, ediciones menores y todas las decisiones del proyecto.
-Asistencia técnica: *Claude Sonnet* (Anthropic) — implementación, depuración y documentación bajo dirección del autor.
+Asistencia técnica: *Claude Sonnet* (Anthropic) — implementación, depuración, optimización y documentación bajo dirección del autor.
