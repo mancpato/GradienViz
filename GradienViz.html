@@ -185,6 +185,48 @@
     }
 
     #sidebar-spacer { flex: 1; }
+
+    @media (max-width: 767px), (max-height: 767px) {
+      body {
+        height: auto;
+        overflow-y: auto;
+      }
+
+      #main {
+        grid-template-columns: 1fr;
+        height: auto;
+        gap: 8px;
+        padding: 8px;
+      }
+
+      #canvas-wrap {
+        grid-column: 1;
+        height: auto;
+      }
+
+      #defaultCanvas0 {
+        touch-action: manipulation;
+      }
+
+      #sidebar {
+        grid-column: 1;
+        width: 100%;
+        overflow-y: visible;
+      }
+
+      #header {
+        padding: 4px 8px;
+        height: auto;
+      }
+
+      #header h1 {
+        font-size: 13px;
+      }
+
+      #header .subtitle {
+        font-size: 10px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -221,6 +263,12 @@
  */
 
  // BLOQUE A — Constantes y paletas de color
+const UMBRAL_SIMPLE = 768;   // px, a calibrar empíricamente
+
+function esModoSimple() {
+  return Math.min(windowWidth, windowHeight) < UMBRAL_SIMPLE;
+}
+
 const VIRIDIS = [
   [68,  1, 84],
   [72, 40,120],
@@ -292,9 +340,13 @@ const G = {
   bufCampo:   null,
   bufDirty:   true,
 
+  hoverMB: null,
+
   puntoDrag:  null,
 
   condicion: null,
+
+  modoSimpleActual: false,
 };
 
 // Paneles calculados en setup/resize
@@ -379,7 +431,24 @@ function p2c(panel, m, b) {
   };
 }
 
-function calcGradiente(m, b) 
+// Panel 2: canvas pixels → (m, b), snap al centro de celda de la grilla resHeatmap × resHeatmap
+function c2pParams(panel, mx, my) {
+  const { ox, oy, cw, ch } = panel;
+  const x0 = ox + PAD.l, y0 = oy + PAD.t;
+  const pw = cw - PAD.l - PAD.r, ph = ch - PAD.t - PAD.b;
+  const tm = constrain((mx - x0) / pw, 0, 1);
+  const tb = 1 - constrain((my - y0) / ph, 0, 1);
+
+  const N = G.resHeatmap;
+  const ix = constrain(Math.floor(tm * N), 0, N - 1);
+  const iy = constrain(Math.floor(tb * N), 0, N - 1);
+
+  const m = G.m_lo + (ix + 0.5) / N * (G.m_hi - G.m_lo);
+  const b = G.b_lo + (iy + 0.5) / N * (G.b_hi - G.b_lo);
+  return { m, b };
+}
+
+function calcGradiente(m, b)
 {
   const n = G.puntos.length;
   let gm = 0, gb = 0;
@@ -651,6 +720,9 @@ function dibujarPanel1() {
   dibujarEjes(p, 0, 1, 0, 1, 5);
   dibujarRectaRegresion(p);
   dibujarRectaFoco(p);
+  if (G.hoverMB !== null) {
+    dibujarRecta(p, G.hoverMB.m, G.hoverMB.b, 'rgba(30,41,59,0.45)', 1);
+  }
   dibujarPuntosP1(p);
 
   // Coordenadas en esquina superior derecha del padding del título
@@ -797,15 +869,19 @@ function dibujarTrayectorias(panel) {
   }
 }
 
+function dibujarRecta(panel, m, b, color, weight) {
+  const {cx:x0, cy:y0} = d2c(panel, 0, b);
+  const {cx:x1, cy:y1} = d2c(panel, 1, m+b);
+  stroke(color); strokeWeight(weight);
+  line(x0, y0, x1, y1);
+}
+
 function dibujarRectaFoco(panel) {
   if (!G.trayectorias.length) return;
   const tr = G.trayectorias[G.trajEnFoco];
   if (!tr || !tr.hist.length) return;
   const {m, b} = tr.hist[tr.hist.length-1];
-  const {cx:x0, cy:y0} = d2c(panel, 0, b);
-  const {cx:x1, cy:y1} = d2c(panel, 1, m+b);
-  stroke(251,146,60); strokeWeight(2);
-  line(x0, y0, x1, y1);
+  dibujarRecta(panel, m, b, 'rgba(251,146,60,1)', 2);
 }
 
 function dibujarPanel2() {
@@ -897,23 +973,86 @@ function dibujarPanel3() {
   ellipse(toX(n-1), toY(last.media), 7, 7);
 }
 
+function dibujarMiniJT() {
+  const dpr = window.devicePixelRatio || 1;
+  const wCss = elMiniJT.clientWidth;
+  const wPix = Math.round(wCss * dpr);
+  const hPix = Math.round(48 * dpr);
+  if (elMiniJT.width !== wPix || elMiniJT.height !== hPix) {
+    elMiniJT.width = wPix;
+    elMiniJT.height = hPix;
+    ctxMiniJT.setTransform(1, 0, 0, 1, 0, 0);
+    ctxMiniJT.scale(dpr, dpr);
+  }
+
+  const w = wCss, h = 48;
+  ctxMiniJT.clearRect(0, 0, w, h);
+
+  if (elMiniJTVal) {
+    elMiniJTVal.textContent = G.histJ.length
+      ? G.histJ[G.histJ.length - 1].media.toFixed(4)
+      : '—';
+  }
+
+  if (wCss < 1) return;
+  if (G.histJ.length < 2) return;
+
+  const n = G.histJ.length;
+  const jMin = G.J_star * 0.9;
+  const jMax = G.histJ[0].media * 1.1;
+  const toX = i => (i / (n - 1)) * w;
+  const toY = j => h - constrain((j - jMin) / (jMax - jMin), 0, 1) * h;
+
+  ctxMiniJT.strokeStyle = '#60a5fa';
+  ctxMiniJT.lineWidth = 1.5;
+  ctxMiniJT.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = toX(i), y = toY(G.histJ[i].media);
+    if (i === 0) ctxMiniJT.moveTo(x, y); else ctxMiniJT.lineTo(x, y);
+  }
+  ctxMiniJT.stroke();
+
+  const last = G.histJ[n - 1];
+  ctxMiniJT.fillStyle = '#60a5fa';
+  ctxMiniJT.beginPath();
+  ctxMiniJT.arc(toX(n - 1), toY(last.media), 2.5, 0, Math.PI * 2);
+  ctxMiniJT.fill();
+}
+
 // ═══════════════════════════════════════════════════════════════
 // BLOQUE F — Controles DOM
 // ═══════════════════════════════════════════════════════════════
 
 const RES_VALUES  = [6, 8, 10, 12, 16];
-const TRAY_VALUES = [3, 4, 5, 6];
+const TRAY_VALUES = [2, 3, 4, 5, 6];
 const SPEED_VALUES = [1, 2, 5, 10, 20, 50, 100]; // NUEVO
 
-let elBtnTrain, elBtnReset, elBtnPuntos, elBtnPerturbar;
+let elBtnTrain, elBtnReset, elBtnPuntos, elBtnPerturbar, elBtnBorrar;
 let elBtnStep1, elBtnStep10, elBtnStep50; // NUEVO
 let elSliderRes, elSliderTray, elSliderEta, elSliderSpeed; // NUEVO speed
 let elCheckRastro, elInputFoco;
 let elValRes, elValTray, elValEta, elValSpeed; // NUEVO speed
+let elMiniJT, ctxMiniJT, elMiniJTVal;
 
 function crearControles() {
   const sb = document.getElementById('sidebar');
   sb.innerHTML = '';
+
+  elBtnTrain = elBtnReset = elBtnPuntos = elBtnPerturbar = elBtnBorrar = null;
+  elBtnStep1 = elBtnStep10 = elBtnStep50 = null;
+  elSliderRes = elSliderTray = elSliderEta = elSliderSpeed = null;
+  elCheckRastro = elInputFoco = null;
+  elValRes = elValTray = elValEta = elValSpeed = null;
+  elMiniJT = ctxMiniJT = elMiniJTVal = null;
+
+  const simple = esModoSimple();
+  if (simple) {
+    G.resHeatmap     = 8;
+    G.numTrayPorLado = 2;
+    G.velocidad      = 5;
+    G.trajEnFoco     = Math.min(G.trajEnFoco, 3);
+    G.bufDirty       = true;
+  }
 
   // ── Datos ────────────────────────────────────────────────
   const secDatos = mkSection('Datos');
@@ -924,34 +1063,44 @@ function crearControles() {
   });
   secDatos.appendChild(elBtnPuntos);
 
-  elBtnPerturbar = mkBtn('Perturbar', '', perturbarPuntos);
-  secDatos.appendChild(elBtnPerturbar);
+  if (simple) {
+    elBtnBorrar = mkBtn('Borrar todo', 'btn-danger', () => {
+      G.puntos = [];
+      recalcularTodo();
+    });
+    secDatos.appendChild(elBtnBorrar);
+  } else {
+    elBtnPerturbar = mkBtn('Perturbar', '', perturbarPuntos);
+    secDatos.appendChild(elBtnPerturbar);
+  }
   sb.appendChild(secDatos);
 
   // ── Modelo ───────────────────────────────────────────────
   const secModelo = mkSection('Modelo');
 
-  // resHeatmap (índice discreto)
-  [elSliderRes, elValRes] = mkSlider(
-    secModelo, 'Heatmap res', 0, RES_VALUES.length-1, RES_VALUES.indexOf(G.resHeatmap),
-    v => { G.resHeatmap = RES_VALUES[v]; G.bufDirty = true; return G.resHeatmap; }
-  );
+  if (!simple) {
+    // resHeatmap (índice discreto)
+    [elSliderRes, elValRes] = mkSlider(
+      secModelo, 'Heatmap res', 0, RES_VALUES.length-1, RES_VALUES.indexOf(G.resHeatmap),
+      v => { G.resHeatmap = RES_VALUES[v]; G.bufDirty = true; return G.resHeatmap; }
+    );
 
-  // numTrayPorLado (índice discreto)
-  [elSliderTray, elValTray] = mkSlider(
-    secModelo, 'Trayectorias', 0, TRAY_VALUES.length-1, TRAY_VALUES.indexOf(G.numTrayPorLado),
-    v => {
-      G.numTrayPorLado = TRAY_VALUES[v];
-      const maxIdx = G.numTrayPorLado * G.numTrayPorLado - 1;
-      elInputFoco.max = maxIdx;
-      if (G.trajEnFoco > maxIdx) {
-        G.trajEnFoco = maxIdx;
-        elInputFoco.value = maxIdx;
+    // numTrayPorLado (índice discreto)
+    [elSliderTray, elValTray] = mkSlider(
+      secModelo, 'Trayectorias', 0, TRAY_VALUES.length-1, TRAY_VALUES.indexOf(G.numTrayPorLado),
+      v => {
+        G.numTrayPorLado = TRAY_VALUES[v];
+        const maxIdx = G.numTrayPorLado * G.numTrayPorLado - 1;
+        elInputFoco.max = maxIdx;
+        if (G.trajEnFoco > maxIdx) {
+          G.trajEnFoco = maxIdx;
+          elInputFoco.value = maxIdx;
+        }
+        limpiarTrayectorias();
+        return G.numTrayPorLado;
       }
-      limpiarTrayectorias();
-      return G.numTrayPorLado;
-    }
-  );
+    );
+  }
 
   // eta (logarítmico)
   [elSliderEta, elValEta] = mkSlider(
@@ -999,13 +1148,43 @@ function crearControles() {
   sb.appendChild(secVis);
 
   // NUEVO: ── Velocidad ────────────────────────────────────
-  const secVel = mkSection('Velocidad');
-  [elSliderSpeed, elValSpeed] = mkSlider(
-    secVel, 'Speed', 0, SPEED_VALUES.length-1, SPEED_VALUES.indexOf(G.velocidad),
-    v => { G.velocidad = SPEED_VALUES[v]; return G.velocidad + '×'; }
-  );
-  // El slider de velocidad NUNCA se deshabilita (se puede cambiar en caliente)
-  sb.appendChild(secVel);
+  if (!simple) {
+    const secVel = mkSection('Velocidad');
+    [elSliderSpeed, elValSpeed] = mkSlider(
+      secVel, 'Speed', 0, SPEED_VALUES.length-1, SPEED_VALUES.indexOf(G.velocidad),
+      v => { G.velocidad = SPEED_VALUES[v]; return G.velocidad + '×'; }
+    );
+    // El slider de velocidad NUNCA se deshabilita (se puede cambiar en caliente)
+    sb.appendChild(secVel);
+  }
+
+  // ── J(t) miniatura (solo modo simple) ─────────────────────
+  if (simple) {
+    const secMiniJT = mkSection('J(t)');
+    const rowLbl = document.createElement('div');
+    rowLbl.className = 'ctrl-label';
+    const spanJ = document.createElement('span');
+    spanJ.textContent = 'J';
+    const spanVal = document.createElement('span');
+    spanVal.className = 'val';
+    elMiniJTVal = spanVal;
+    rowLbl.appendChild(spanJ);
+    rowLbl.appendChild(spanVal);
+    secMiniJT.appendChild(rowLbl);
+
+    elMiniJT = document.createElement('canvas');
+    elMiniJT.style.width = '100%';
+    elMiniJT.style.height = '48px';
+    elMiniJT.style.background = 'transparent';
+    secMiniJT.appendChild(elMiniJT);
+    sb.appendChild(secMiniJT);
+
+    ctxMiniJT = elMiniJT.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    elMiniJT.width  = Math.round(elMiniJT.clientWidth * dpr);
+    elMiniJT.height = Math.round(48 * dpr);
+    ctxMiniJT.scale(dpr, dpr);
+  }
 
   // ── Spacer ────────────────────────────────────────────────
   const spacer = document.createElement('div');
@@ -1027,20 +1206,23 @@ function crearControles() {
     actualizarEstadoControles();
   });
 
-  // NUEVO: botones de paso discreto
-  const rowSteps = document.createElement('div');
-  rowSteps.className = 'btn-group';
-  elBtnStep1  = mkBtn('+1',  '', () => avanzarPasos(1));
-  elBtnStep10 = mkBtn('+10', '', () => avanzarPasos(10));
-  elBtnStep50 = mkBtn('+50', '', () => avanzarPasos(50));
-  rowSteps.appendChild(elBtnStep1);
-  rowSteps.appendChild(elBtnStep10);
-  rowSteps.appendChild(elBtnStep50);
+  secAccion.appendChild(elBtnTrain);
+
+  if (!simple) {
+    // NUEVO: botones de paso discreto
+    const rowSteps = document.createElement('div');
+    rowSteps.className = 'btn-group';
+    elBtnStep1  = mkBtn('+1',  '', () => avanzarPasos(1));
+    elBtnStep10 = mkBtn('+10', '', () => avanzarPasos(10));
+    elBtnStep50 = mkBtn('+50', '', () => avanzarPasos(50));
+    rowSteps.appendChild(elBtnStep1);
+    rowSteps.appendChild(elBtnStep10);
+    rowSteps.appendChild(elBtnStep50);
+    secAccion.appendChild(rowSteps);
+  }
 
   elBtnReset = mkBtn('Reset', 'btn-danger',  () => { limpiarTrayectorias(); G.bufDirty = true; });
 
-  secAccion.appendChild(elBtnTrain);
-  secAccion.appendChild(rowSteps);
   secAccion.appendChild(elBtnReset);
   sb.appendChild(secAccion);
 
@@ -1051,15 +1233,16 @@ function actualizarEstadoControles() {
   if (!elBtnTrain) return;
   const anim = G.estado === 'animando';
   elBtnPuntos.disabled  = anim;
-  elBtnPerturbar.disabled = anim;
-  elSliderRes.disabled  = anim;
-  elSliderTray.disabled = anim;
+  if (elBtnPerturbar) elBtnPerturbar.disabled = anim;
+  if (elBtnBorrar)    elBtnBorrar.disabled = anim;
+  if (elSliderRes)    elSliderRes.disabled  = anim;
+  if (elSliderTray)   elSliderTray.disabled = anim;
   elSliderEta.disabled  = anim;
   // NUEVO: speed siempre habilitado; step buttons habilitados cuando NO animando
   const puedeStep = !anim;
-  elBtnStep1.disabled  = !puedeStep;
-  elBtnStep10.disabled = !puedeStep;
-  elBtnStep50.disabled = !puedeStep;
+  if (elBtnStep1)  elBtnStep1.disabled  = !puedeStep;
+  if (elBtnStep10) elBtnStep10.disabled = !puedeStep;
+  if (elBtnStep50) elBtnStep50.disabled = !puedeStep;
 
   elBtnTrain.textContent = anim ? 'Stop' : 'Train';
   elBtnTrain.className   = 'btn ' + (anim ? 'btn-danger' : 'btn-primary');
@@ -1141,6 +1324,23 @@ function sliderToEta(s) {
 function calcularPaneles() {
   const W = width;
   const H = height;
+
+  if (esModoSimple()) {
+    paneles.P3 = null;
+    if (H >= W) {
+      // Vertical: P1 arriba, P2 abajo
+      const mitad = Math.floor(H / 2);
+      paneles.P1 = { ox: 0, oy: 0,     cw: W, ch: mitad };
+      paneles.P2 = { ox: 0, oy: mitad, cw: W, ch: H - mitad };
+    } else {
+      // Horizontal: P1 izquierda, P2 derecha
+      const mitad = Math.floor(W / 2);
+      paneles.P1 = { ox: 0,     oy: 0, cw: mitad,     ch: H };
+      paneles.P2 = { ox: mitad, oy: 0, cw: W - mitad, ch: H };
+    }
+    return;
+  }
+
   // P1: columna izquierda (~30%), P2: columna central (~55% = resto), P3: bajo P1 (~35% alto)
   const colIzq  = Math.floor(W * 0.30);
   const colCent = W - colIzq;
@@ -1152,10 +1352,25 @@ function calcularPaneles() {
   paneles.P3 = { ox: 0,       oy: p1h, cw: colIzq,  ch: p3h };
 }
 
-function setup() {
+function dimensionesCanvas() {
   const wrap = document.getElementById('canvas-wrap');
-  const cnv = createCanvas(wrap.clientWidth, wrap.clientHeight);
+  if (!esModoSimple()) {
+    return { w: wrap.clientWidth, h: wrap.clientHeight };
+  }
+  const w = wrap.clientWidth;
+  if (windowHeight >= windowWidth) {
+    // Vertical: dos paneles apilados
+    return { w, h: 1.7 * w };
+  }
+  // Horizontal: dos paneles lado a lado
+  return { w, h: Math.min(w / 2, windowHeight * 0.75) };
+}
+
+function setup() {
+  const { w, h } = dimensionesCanvas();
+  const cnv = createCanvas(w, h);
   cnv.parent('canvas-wrap');
+  G.modoSimpleActual = esModoSimple();
   calcularPaneles();
   crearControles();
   frameRate(60);
@@ -1172,14 +1387,23 @@ function draw() {
   }
   dibujarPanel1();
   dibujarPanel2();
-  dibujarPanel3();
+  if (paneles.P3) dibujarPanel3();
+  if (ctxMiniJT) dibujarMiniJT();
 }
 
 function windowResized() {
-  const wrap = document.getElementById('canvas-wrap');
-  resizeCanvas(wrap.clientWidth, wrap.clientHeight);
+  const { w, h } = dimensionesCanvas();
+  resizeCanvas(w, h);
   calcularPaneles();
   G.bufDirty = true;
+
+  const nuevo = esModoSimple();
+  if (nuevo !== G.modoSimpleActual) {
+    G.modoSimpleActual = nuevo;
+    limpiarTrayectorias();
+    crearControles();
+    G.bufDirty = true;
+  }
 }
 
 function encontrarPunto(mx, my, umbral) {
@@ -1206,6 +1430,14 @@ function agregarPunto(mx, my) {
 function mousePressed() {
   if (G.estado === 'animando') return;
   if (!dentroDePanel(paneles.P1, mouseX, mouseY)) return;
+
+  if (esModoSimple()) {
+    if (G.puntos.length < 20) {
+      agregarPunto(mouseX, mouseY);
+      recalcularTodo();
+    }
+    return;
+  }
 
   const idx = encontrarPunto(mouseX, mouseY, 12);
 
@@ -1234,6 +1466,16 @@ function mouseDragged() {
 
 function mouseReleased() {
   G.puntoDrag = null;
+}
+
+function mouseMoved() {
+  if (esModoSimple()) { G.hoverMB = null; return; }
+  if (dentroDePanel(paneles.P2, mouseX, mouseY) &&
+      G.puntos.length >= 3 && G.m_star !== null && G.bufHeatmap) {
+    G.hoverMB = c2pParams(paneles.P2, mouseX, mouseY);
+  } else {
+    G.hoverMB = null;
+  }
 }
 </script>
 </body>
