@@ -266,7 +266,7 @@
 const UMBRAL_SIMPLE = 768;   // px, a calibrar empíricamente
 
 function esModoSimple() {
-  return Math.min(windowWidth, windowHeight) < UMBRAL_SIMPLE;
+   return window.innerWidth < 700;
 }
 
 const VIRIDIS = [
