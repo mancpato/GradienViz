@@ -10,9 +10,9 @@ Está acompañado de cinco documentos en LaTeX que abordan el mismo problema des
 | Documento | Perspectiva | Público |
 |---|---|---|
 | **GradienVizMateBasic.tex** | Cálculo diferencial | Estudiantes de primer semestre |
-| **GradienVizMate.tex** | Cálculo · Álgebra lineal · Estadística | Estudiantes de IA y aprendizaje automático |
 | **GradienVizAlgLin.tex** | Álgebra lineal y proyección ortogonal | Cursos de álgebra lineal |
 | **GradienVizMaxVer.tex** | Máxima verosimilitud | Cursos de estadística inferencial |
+| **GradienVizMate.tex** | Cálculo · Álgebra lineal · Estadística | Estudiantes de IA y aprendizaje automático |
 | **GradienVizMasAlla.tex** | Generalización a otros modelos | Cualquier nivel, como cierre |
 
 Los cinco documentos comparten notación, formato y estilo. Pueden usarse de forma independiente o como colección progresiva.
@@ -70,9 +70,16 @@ Evolución del costo promedio sobre todas las trayectorias a lo largo de las ite
 
 Cualquier cambio en los datos recalcula automáticamente la solución óptima y limpia las trayectorias anteriores.
 
+### Explorar el espacio de parámetros
+| Acción | Resultado |
+|---|---|
+| Mover el mouse sobre el heatmap del panel central | Dibuja tenuemente en el panel izquierdo la recta correspondiente a los valores (m, b) de la celda bajo el cursor |
+
+El punto (m, b) hace *snap* al centro de la celda de la grilla bajo el cursor, sin interpolación continua. Permite relacionar visualmente cualquier punto del espacio de parámetros con la recta que representa en el espacio de datos, sin necesidad de iniciar el entrenamiento.
+
 ### Modelo
 - **Heatmap res**: resolución de la malla de la superficie J(m,b) — valores {6, 8, 10, 12, 16}
-- **Trayectorias**: número de trayectorias por lado de la grilla — valores {3, 4, 5, 6} → entre 9 y 36 trayectorias totales
+- **Trayectorias**: número de trayectorias por lado de la grilla — valores {2, 3, 4, 5, 6} → entre 4 y 36 trayectorias totales
 - **η (lr)**: tasa de aprendizaje en escala logarítmica, rango [0.001, 0.5]
 
 ### Visualización
@@ -86,6 +93,33 @@ Controla cuántas iteraciones se ejecutan por frame. El valor 1× es suficiente 
 - **Train**: inicia el descenso por gradiente desde una grilla uniforme de puntos iniciales
 - **Stop**: pausa la animación (se puede reanudar con Train)
 - **Reset**: limpia trayectorias y vuelve al estado inicial
+
+---
+
+## Modo simple (pantallas pequeñas)
+
+Se activa automáticamente cuando `min(ancho, alto)` de la ventana es menor a 768px — es un criterio de *viewport*, no de tipo de dispositivo. Aplica igual en un celular, una tablet chica, o una ventana de escritorio angosta.
+
+**Layout**: solo se muestran los paneles de datos y de parámetros (P1 y P2), completos, sin el panel inferior de J(t). Se apilan en vertical o se colocan lado a lado en horizontal según la orientación de la pantalla. La página permite scroll natural en vez de comprimirse a un viewport fijo.
+
+Los controles se reducen a lo esencial para no saturar el sidebar en pantallas chicas:
+
+| Control | Modo normal | Modo simple |
+|---|---|---|
+| Heatmap res | ajustable | fijo en 8 |
+| Trayectorias | ajustable | fijo en 2 (4 trayectorias, en las esquinas) |
+| Velocidad | ajustable | fija en 5× |
+| η (lr) | ajustable | ajustable (el único slider que se conserva) |
+| Perturbar | disponible | no disponible |
+| Pasos +1/+10/+50 | disponibles | no disponibles |
+| Puntos: agregar | click | tap |
+| Puntos: mover | arrastrar | no disponible |
+| Puntos: borrar | Ctrl+Click individual | botón "Borrar todo" |
+| Panel J(t) | panel completo con banda ±σ | sparkline miniatura en el sidebar |
+
+El modo se reevalúa en vivo: al girar el dispositivo o redimensionar la ventana cruzando el umbral, la interfaz cambia sin recargar la página.
+
+Pensado para que los alumnos puedan explorar el visualizador desde su propio celular durante la clase, con foco exclusivo en el efecto de η sobre la convergencia.
 
 ---
 
