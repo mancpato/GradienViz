@@ -28,8 +28,7 @@
       color: var(--text);
       font-family: 'IBM Plex Sans', sans-serif;
       font-size: 13px;
-      height: 100vh;
-      overflow: hidden;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
@@ -63,6 +62,7 @@
       grid-template-columns: 1fr 220px;
       grid-template-rows: 1fr;
       height: calc(100vh - 36px);
+      min-height: 640px;   /* si la ventana es más baja, el body hace scroll */
       gap: 12px;
       padding: 12px;
     }
@@ -75,17 +75,27 @@
       height: 100%;
     }
 
+    /* Banda de acciones: se posiciona desde JS sobre el hueco reservado
+       en la columna izquierda del canvas, entre el panel de datos y J(t). */
+    #acciones {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 5;
+    }
+
     #defaultCanvas0 {
       display: block !important;
     }
 
     #sidebar {
       grid-column: 2;
+      align-self: start;          /* altura natural — sin hueco muerto */
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 4px;
       padding: 14px 12px;
-      overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 14px;
@@ -184,49 +194,74 @@
       font-size: 12px;
     }
 
-    #sidebar-spacer { flex: 1; }
-
-    @media (max-width: 767px), (max-height: 767px) {
-      body {
-        height: auto;
-        overflow-y: auto;
-      }
-
-      #main {
-        grid-template-columns: 1fr;
-        height: auto;
-        gap: 8px;
-        padding: 8px;
-      }
-
-      #canvas-wrap {
-        grid-column: 1;
-        height: auto;
-      }
-
-      #defaultCanvas0 {
-        touch-action: manipulation;
-      }
-
-      #sidebar {
-        grid-column: 1;
-        width: 100%;
-        overflow-y: visible;
-      }
-
-      #header {
-        padding: 4px 8px;
-        height: auto;
-      }
-
-      #header h1 {
-        font-size: 13px;
-      }
-
-      #header .subtitle {
-        font-size: 10px;
-      }
+    /* ── Modo simple ────────────────────────────────────────────
+       La clase la aplica JS (aplicarClaseModo) usando el MISMO
+       criterio que esModoSimple(): únicamente el ancho de ventana.
+       No hay media query: así CSS y lógica de dibujo no pueden
+       desincronizarse y no existe un "modo intermedio". */
+    body.modo-simple #main {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto auto;
+      height: auto;
+      min-height: 0;
+      gap: 8px;
+      padding: 8px;
     }
+
+    body.modo-simple #canvas-wrap {
+      grid-column: 1;
+      height: auto;
+    }
+
+    body.modo-simple #acciones { display: none; }
+
+    body.modo-simple #defaultCanvas0 { touch-action: manipulation; }
+
+    /* Fila de acceso rápido: J(t) + Entrenar/Reiniciar, justo bajo el
+       heatmap. Solo existe en modo simple; en modo ancho permanece
+       oculta y vacía (crearControles no la puebla). */
+    #accSimple {
+      display: none;
+    }
+    body.modo-simple #accSimple {
+      grid-column: 1;
+      display: grid;
+      grid-template-columns: 1fr 108px;
+      gap: 8px;
+      align-items: stretch;
+      padding: 10px 10px 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+
+    #accSimple .accSimple-jt {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    #accSimple .accSimple-botones {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #accSimple .accSimple-botones .btn {
+      flex: 1;
+      padding: 0;
+      font-size: 12px;
+    }
+
+    body.modo-simple #sidebar {
+      grid-column: 1;
+      width: 100%;
+    }
+
+    body.modo-simple #header { padding: 4px 8px; height: auto; }
+    body.modo-simple #header h1 { font-size: 13px; }
+    body.modo-simple #header .subtitle { font-size: 10px; }
   </style>
 </head>
 <body>
@@ -240,7 +275,8 @@
 </div>
 
 <div id="main">
-  <div id="canvas-wrap"></div>
+  <div id="canvas-wrap"><div id="acciones"></div></div>
+  <div id="accSimple"></div>
   <div id="sidebar"></div>
 </div>
 
@@ -263,10 +299,17 @@
  */
 
  // BLOQUE A — Constantes y paletas de color
-const UMBRAL_SIMPLE = 768;   // px, a calibrar empíricamente
+// Único disparador de modo: el ANCHO disponible.
+// La altura nunca cambia el modo — si la ventana es baja, el scroll resuelve.
+const UMBRAL_SIMPLE = 768;   // px
 
 function esModoSimple() {
-   return window.innerWidth < 700;
+   return window.innerWidth < UMBRAL_SIMPLE;
+}
+
+// Mantiene el CSS sincronizado con la lógica de dibujo: una sola decisión.
+function aplicarClaseModo() {
+  document.body.classList.toggle('modo-simple', esModoSimple());
 }
 
 const VIRIDIS = [
@@ -306,7 +349,14 @@ const JITTER_MAX = 0.025;  // desplazamiento máximo en x al perturbar
 const D_REF_COLOR = 0.12;  // fracción del rango: distancia que da rojo pleno
 
 // Padding interno de cada panel (px)
-const PAD = { l: 52, r: 16, t: 18, b: 60 };
+const PAD = { l: 52, r: 16, t: 18, b: 26 };
+
+// P2 necesita más margen izquierdo que P1/P3: además de los números del
+// eje, aloja las etiquetas rotadas "b" y "b* = ...".
+const PAD2 = { l: 72, r: PAD.r, t: PAD.t, b: PAD.b };
+
+// Altura de la banda de botones de acción en la columna izquierda (modo normal)
+const ACC_H = 88;
 
 // ═══════════════════════════════════════════════════════════════
 // BLOQUE B — Estado global
@@ -319,9 +369,8 @@ const G = {
   m_lo: -0.8, m_hi: 1.8,
   b_lo: -0.6, b_hi: 1.6,
 
-  resHeatmap:     8,
-  numTrayPorLado: 4,
-  eta:            0.05,
+  resolucion:     6,   // resolución compartida: heatmap N×N y trayectorias N×N
+  eta:            0.02,
   maxIter:        2000,
   tolerancia:     1e-4,
   dejarRastro:    true,
@@ -347,6 +396,7 @@ const G = {
   condicion: null,
 
   modoSimpleActual: false,
+  prefsNormales:    null,   // respaldo de ajustes al pasar a modo simple
 };
 
 // Paneles calculados en setup/resize
@@ -354,6 +404,7 @@ const paneles = {
   P1: { ox:0, oy:0, cw:0, ch:0 },
   P2: { ox:0, oy:0, cw:0, ch:0 },
   P3: { ox:0, oy:0, cw:0, ch:0 },
+  ACC:{ ox:0, oy:0, cw:0, ch:0 },   // banda de botones (no se dibuja)
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -426,20 +477,20 @@ function p2c(panel, m, b) {
   const tm = (m - G.m_lo) / (G.m_hi - G.m_lo);
   const tb = (b - G.b_lo) / (G.b_hi - G.b_lo);
   return {
-    cx: ox + PAD.l + tm * (cw - PAD.l - PAD.r),
-    cy: oy + PAD.t + (1 - tb) * (ch - PAD.t - PAD.b),
+    cx: ox + PAD2.l + tm * (cw - PAD2.l - PAD2.r),
+    cy: oy + PAD2.t + (1 - tb) * (ch - PAD2.t - PAD2.b),
   };
 }
 
-// Panel 2: canvas pixels → (m, b), snap al centro de celda de la grilla resHeatmap × resHeatmap
+// Panel 2: canvas pixels → (m, b), snap al centro de celda de la grilla resolución × resolución
 function c2pParams(panel, mx, my) {
   const { ox, oy, cw, ch } = panel;
-  const x0 = ox + PAD.l, y0 = oy + PAD.t;
-  const pw = cw - PAD.l - PAD.r, ph = ch - PAD.t - PAD.b;
+  const x0 = ox + PAD2.l, y0 = oy + PAD2.t;
+  const pw = cw - PAD2.l - PAD2.r, ph = ch - PAD2.t - PAD2.b;
   const tm = constrain((mx - x0) / pw, 0, 1);
   const tb = 1 - constrain((my - y0) / ph, 0, 1);
 
-  const N = G.resHeatmap;
+  const N = G.resolucion;
   const ix = constrain(Math.floor(tm * N), 0, N - 1);
   const iy = constrain(Math.floor(tb * N), 0, N - 1);
 
@@ -524,13 +575,13 @@ function inicializarTrayectorias() {
   G.trayectorias = [];
   G.histJ = [];
   G.paso  = 0;
-  const N = G.numTrayPorLado;
-  for (let i = 0; i < N; i++) {
-    for (let j = 0; j < N; j++) {
-      const tm = N === 1 ? 0.5 : i/(N-1);
-      const tb = N === 1 ? 0.5 : j/(N-1);
-      const m0 = G.m_lo + (0.05 + 0.9*tm) * (G.m_hi - G.m_lo);
-      const b0 = G.b_lo + (0.05 + 0.9*tb) * (G.b_hi - G.b_lo);
+  const N = G.resolucion;
+  // Mismo centro de celda que usa el heatmap (ver construirHeatmap):
+  // m = m_lo + (ix+0.5)/N*(m_hi-m_lo) — así ambos coinciden siempre.
+  for (let iy = 0; iy < N; iy++) {
+    for (let ix = 0; ix < N; ix++) {
+      const m0 = G.m_lo + (ix+0.5)/N * (G.m_hi - G.m_lo);
+      const b0 = G.b_lo + (iy+0.5)/N * (G.b_hi - G.b_lo);
       G.trayectorias.push({
         hist: [{m: m0, b: b0, J: calcJ_mb(m0, b0)}],
         conv: false, iterConv: null,
@@ -644,10 +695,10 @@ function dibujarPanel(panel, titulo, bgR, bgG, bgB, brR, brG, brB) {
   text(titulo, ox + PAD.l, oy + PAD.t / 2);
 }
 
-function dibujarEjes(panel, xLo, xHi, yLo, yHi, nTicks) {
+function dibujarEjes(panel, xLo, xHi, yLo, yHi, nTicks, pad = PAD) {
   const { ox, oy, cw, ch } = panel;
-  const x0 = ox+PAD.l, y0 = oy+PAD.t;
-  const pw  = cw-PAD.l-PAD.r, ph = ch-PAD.t-PAD.b;
+  const x0 = ox+pad.l, y0 = oy+pad.t;
+  const pw  = cw-pad.l-pad.r, ph = ch-pad.t-pad.b;
 
   stroke(100,100,110); strokeWeight(1.5);
   line(x0, y0,    x0,    y0+ph);
@@ -725,12 +776,16 @@ function dibujarPanel1() {
   }
   dibujarPuntosP1(p);
 
-  // Coordenadas en esquina superior derecha del padding del título
+  // Coordenadas en esquina superior derecha del padding del título.
+  // Se omiten si el panel es angosto: se encimarían con el título.
+  const hayEspacioCoords = (p.cw - PAD.l - PAD.r) > 260;
   noStroke(); fill(122,122,154);
   textFont('IBM Plex Mono, monospace');
   textSize(FS - 1);
   textAlign(RIGHT, CENTER);
-  if (G.puntoDrag !== null) {
+  if (!hayEspacioCoords) {
+    /* sin espacio: no se dibujan */
+  } else if (G.puntoDrag !== null) {
     const {x, y} = G.puntos[G.puntoDrag];
     text('x=' + x.toFixed(3) + '  y=' + y.toFixed(3),
       p.ox + p.cw - PAD.r, p.oy + PAD.t / 2);
@@ -741,23 +796,20 @@ function dibujarPanel1() {
   }
 
   const nPts = G.puntos.length;
-  noStroke(); fill(110,110,130);
-  textFont('IBM Plex Mono, monospace');
-  textSize(FS);
-  textAlign(LEFT, BOTTOM);
-  text(
-    nPts >= 3 && G.m_star !== null
-      ? `${nPts}/20 pts  |  MSE: ${G.J_star.toFixed(4)}`
-      : `${nPts}/20 pts  (mín. 3 para entrenar)`,
-    p.ox + PAD.l, p.oy + p.ch - 22
-  );
-  if (nPts >= 3) {
-    text(
-      G.m_star === null
-        ? 'sistema singular — x constante'
-        : `m* = ${G.m_star.toFixed(3)}    b* = ${G.b_star.toFixed(3)}`,
-      p.ox + PAD.l, p.oy + p.ch - 4
-    );
+  const yTexto = p.oy + PAD.t + (p.ch - PAD.t - PAD.b) - 8;
+  if (nPts < 3) {
+    noStroke(); fill(130,130,148);
+    textFont('IBM Plex Mono, monospace');
+    textSize(FS - 1);
+    textAlign(LEFT, BOTTOM);
+    text(`${nPts}/20 pts  (mín. 3 para entrenar)`, p.ox + PAD.l + 4, yTexto);
+  } else if (G.m_star === null) {
+    noStroke(); fill(130,130,148);
+    textFont('IBM Plex Mono, monospace');
+    textSize(FS - 1);
+    textAlign(LEFT, BOTTOM);
+    text('sistema singular — x constante', p.ox + PAD.l + 4, yTexto);
+  } else {
     if (G.condicion !== null) {
       const k = G.condicion;
       let kStr;
@@ -778,6 +830,7 @@ function dibujarPanel1() {
         fill(122,122,154);
       }
       noStroke();
+      textFont('IBM Plex Mono, monospace');
       textSize(FS - 1);
       textAlign(RIGHT, TOP);
       text(kStr, p.ox + p.cw - PAD.r, p.oy + PAD.t + 4);
@@ -789,7 +842,7 @@ function dibujarPanel1() {
 
 function construirHeatmap() {
   if (G.m_star === null) return;
-  const N = G.resHeatmap;
+  const N = G.resolucion;
   const celdas = [];
   let Jmin=Infinity, Jmax=-Infinity;
   for (let iy=0; iy<N; iy++) {
@@ -812,9 +865,9 @@ function construirHeatmap() {
 }
 
 function dibujarHeatmap(panel) {
-  const N  = G.resHeatmap;
-  const x0 = panel.ox+PAD.l, y0 = panel.oy+PAD.t;
-  const pw = panel.cw-PAD.l-PAD.r, ph = panel.ch-PAD.t-PAD.b;
+  const N  = G.resolucion;
+  const x0 = panel.ox+PAD2.l, y0 = panel.oy+PAD2.t;
+  const pw = panel.cw-PAD2.l-PAD2.r, ph = panel.ch-PAD2.t-PAD2.b;
   const cw = pw/N, ch = ph/N;
   noStroke();
   for (let iy=0; iy<N; iy++) {
@@ -850,9 +903,21 @@ function dibujarTrayectorias(panel) {
     stroke(col); strokeWeight(esFoco ? 3 : 1.5); noFill();
 
     if (G.dejarRastro) {
+      // Se dibuja 1 de cada 2 puntos del historial: el ojo no distingue la
+      // diferencia de trazo, pero el costo de dibujo (dominante con rastro
+      // largo) se reduce a la mitad. El historial completo se conserva
+      // intacto para el cálculo del gradiente — solo se diezma el dibujo.
       beginShape();
-      for (const {m, b} of tr.hist) {
-        const {cx, cy} = p2c(panel, m, b);
+      const h = tr.hist;
+      for (let k = 0; k < h.length; k += 2) {
+        const {cx, cy} = p2c(panel, h[k].m, h[k].b);
+        vertex(cx, cy);
+      }
+      // Asegura que el último punto real siempre se incluya, aunque su
+      // índice no sea par — si no, el trazo podría quedarse corto.
+      if ((h.length - 1) % 2 !== 0) {
+        const last = h[h.length - 1];
+        const {cx, cy} = p2c(panel, last.m, last.b);
         vertex(cx, cy);
       }
       endShape();
@@ -884,6 +949,53 @@ function dibujarRectaFoco(panel) {
   dibujarRecta(panel, m, b, 'rgba(251,146,60,1)', 2);
 }
 
+// Nombres de los ejes del espacio de parámetros: m abajo, b a la izquierda.
+function dibujarEtiquetasEjesP2(panel) {
+  const x0 = panel.ox + PAD2.l, y0 = panel.oy + PAD2.t;
+  const pw = panel.cw - PAD2.l - PAD2.r, ph = panel.ch - PAD2.t - PAD2.b;
+
+  noStroke();
+  fill(160, 160, 185);
+  textFont('IBM Plex Mono, monospace');
+  textSize(FS * 1.15);
+
+  textAlign(CENTER, TOP);
+  text('m', x0 + pw / 2, y0 + ph + 24);
+
+  push();
+  translate(panel.ox + 16, y0 + ph / 2);
+  rotate(-HALF_PI);
+  textAlign(CENTER, CENTER);
+  text('b', 0, 0);
+  pop();
+
+  // m* y b* DENTRO del área de color, en la posición real del óptimo
+  // (no en el margen exterior) — mismo color que la marca ⊕.
+  if (G.m_star === null) return;
+  fill(251, 191, 36);
+  textSize(FS);
+
+  const {cx: mx} = p2c(panel, G.m_star, G.b_lo);
+  const {cy: by} = p2c(panel, G.m_lo,   G.b_star);
+
+  // m*: pegada al borde inferior del área de color, centrada en su x real.
+  textAlign(CENTER, BOTTOM);
+  text(`m* = ${G.m_star.toFixed(3)}`, mx, y0 + ph - 4);
+
+  // b*: dentro del área de color, separada de la etiqueta "b" del eje
+  // (que vive justo al otro lado del borde, en el margen).
+  push();
+  translate(x0 + 22, by);
+  rotate(-HALF_PI);
+  textAlign(CENTER, BOTTOM);
+  text(`b* = ${G.b_star.toFixed(3)}`, 0, -4);
+  pop();
+
+  noStroke(); fill(251, 191, 36);
+  textAlign(LEFT, TOP);
+  text(`MSE = ${G.J_star.toFixed(4)}`, x0 + 4, y0 + 4);
+}
+
 function dibujarPanel2() {
   const p2 = paneles.P2;
   dibujarPanel(p2, 'Espacio (m, b)', 17,17,17, 51,51,51);
@@ -891,7 +1003,8 @@ function dibujarPanel2() {
     if (G.bufDirty || !G.bufHeatmap) construirHeatmap();
     dibujarHeatmap(p2);
   }
-  dibujarEjes(p2, G.m_lo, G.m_hi, G.b_lo, G.b_hi, 5);
+  dibujarEjes(p2, G.m_lo, G.m_hi, G.b_lo, G.b_hi, 5, PAD2);
+  dibujarEtiquetasEjesP2(p2);
   dibujarTrayectorias(p2);
   dibujarPuntoOptimo_P2(p2);
 
@@ -911,16 +1024,18 @@ function dibujarPanel2() {
   // Indicador de estado en el footer
   let estadoTexto = null;
   let estadoR, estadoG, estadoB;
-  if      (G.estado === 'animando')   { estadoTexto = 'Entrenando…';                          estadoR=96;  estadoG=165; estadoB=250; }
-  else if (G.estado === 'convergido') { estadoTexto = 'Convergido ✓';                         estadoR=34;  estadoG=197; estadoB=94;  }
-  else if (G.estado === 'limite')     { estadoTexto = `Límite ${G.maxIter} iters — no convergió`; estadoR=249; estadoG=115; estadoB=22;  }
-  else if (G.estado === 'detenido')   { estadoTexto = 'Detenido';                             estadoR=122; estadoG=122; estadoB=154; }
+  if      (G.estado === 'animando')   { estadoTexto = 'Entrenando…';         estadoR=96;  estadoG=165; estadoB=250; }
+  else if (G.estado === 'convergido') { estadoTexto = 'Convergido ✓';        estadoR=34;  estadoG=197; estadoB=94;  }
+  else if (G.estado === 'limite')     { estadoTexto = 'Límite — no convergió'; estadoR=249; estadoG=115; estadoB=22;  }
+  else if (G.estado === 'detenido')   { estadoTexto = 'Detenido';            estadoR=122; estadoG=122; estadoB=154; }
   if (estadoTexto) {
     noStroke(); fill(estadoR, estadoG, estadoB);
     textFont('IBM Plex Mono, monospace');
     textSize(FS);
-    textAlign(LEFT, BOTTOM);
-    text(estadoTexto, p2.ox + PAD.l, p2.oy + p2.ch - 6);
+    textAlign(RIGHT, BOTTOM);
+    text(estadoTexto,
+         p2.ox + PAD2.l + (p2.cw - PAD2.l - PAD2.r) - 4,
+         p2.oy + PAD2.t + (p2.ch - PAD2.t - PAD2.b) - 4 - FS - 4);
   }
 }
 
@@ -1023,15 +1138,14 @@ function dibujarMiniJT() {
 // BLOQUE F — Controles DOM
 // ═══════════════════════════════════════════════════════════════
 
-const RES_VALUES  = [6, 8, 10, 12, 16];
-const TRAY_VALUES = [2, 3, 4, 5, 6];
+const RES_VALUES = [4, 6, 8];   // heatmap y trayectorias comparten resolución
 const SPEED_VALUES = [1, 2, 5, 10, 20, 50, 100]; // NUEVO
 
 let elBtnTrain, elBtnReset, elBtnPuntos, elBtnPerturbar, elBtnBorrar;
 let elBtnStep1, elBtnStep10, elBtnStep50; // NUEVO
-let elSliderRes, elSliderTray, elSliderEta, elSliderSpeed; // NUEVO speed
+let elSliderRes, elSliderEta, elSliderSpeed;
 let elCheckRastro, elInputFoco;
-let elValRes, elValTray, elValEta, elValSpeed; // NUEVO speed
+let elValRes, elValEta, elValSpeed;
 let elMiniJT, ctxMiniJT, elMiniJTVal;
 
 function crearControles() {
@@ -1040,18 +1154,30 @@ function crearControles() {
 
   elBtnTrain = elBtnReset = elBtnPuntos = elBtnPerturbar = elBtnBorrar = null;
   elBtnStep1 = elBtnStep10 = elBtnStep50 = null;
-  elSliderRes = elSliderTray = elSliderEta = elSliderSpeed = null;
+  elSliderRes = elSliderEta = elSliderSpeed = null;
   elCheckRastro = elInputFoco = null;
-  elValRes = elValTray = elValEta = elValSpeed = null;
+  elValRes = elValEta = elValSpeed = null;
   elMiniJT = ctxMiniJT = elMiniJTVal = null;
 
   const simple = esModoSimple();
   if (simple) {
-    G.resHeatmap     = 8;
-    G.numTrayPorLado = 2;
-    G.velocidad      = 5;
-    G.trajEnFoco     = Math.min(G.trajEnFoco, 3);
-    G.bufDirty       = true;
+    // El modo simple impone valores fijos; se preservan los del usuario
+    // para no perderlos al volver a modo normal.
+    if (!G.prefsNormales) {
+      G.prefsNormales = {
+        resolucion: G.resolucion,
+        velocidad:  G.velocidad,
+      };
+    }
+    G.resolucion = 4;
+    G.velocidad  = 5;
+    G.trajEnFoco = Math.min(G.trajEnFoco, 15);
+    G.bufDirty   = true;
+  } else if (G.prefsNormales) {
+    Object.assign(G, G.prefsNormales);
+    G.prefsNormales = null;
+    G.trajEnFoco = Math.min(G.trajEnFoco, G.resolucion * G.resolucion - 1);
+    G.bufDirty = true;
   }
 
   // ── Datos ────────────────────────────────────────────────
@@ -1073,31 +1199,31 @@ function crearControles() {
     elBtnPerturbar = mkBtn('Perturbar', '', perturbarPuntos);
     secDatos.appendChild(elBtnPerturbar);
   }
-  sb.appendChild(secDatos);
+  // En modo simple, Datos se usa con poca frecuencia (una vez por
+  // "experimento") frente a Entrenar/Reiniciar, así que se agrega al
+  // sidebar al final, después de Modelo y Visualización (ver más abajo).
+  // En modo ancho conserva su posición original: primera sección.
+  if (!simple) sb.appendChild(secDatos);
 
   // ── Modelo ───────────────────────────────────────────────
   const secModelo = mkSection('Modelo');
 
   if (!simple) {
-    // resHeatmap (índice discreto)
+    // Resolución compartida: gobierna heatmap N×N y trayectorias N×N a la
+    // vez (una trayectoria nace en el centro de cada celda del heatmap).
     [elSliderRes, elValRes] = mkSlider(
-      secModelo, 'Heatmap res', 0, RES_VALUES.length-1, RES_VALUES.indexOf(G.resHeatmap),
-      v => { G.resHeatmap = RES_VALUES[v]; G.bufDirty = true; return G.resHeatmap; }
-    );
-
-    // numTrayPorLado (índice discreto)
-    [elSliderTray, elValTray] = mkSlider(
-      secModelo, 'Trayectorias', 0, TRAY_VALUES.length-1, TRAY_VALUES.indexOf(G.numTrayPorLado),
+      secModelo, 'Resolución', 0, RES_VALUES.length-1, RES_VALUES.indexOf(G.resolucion),
       v => {
-        G.numTrayPorLado = TRAY_VALUES[v];
-        const maxIdx = G.numTrayPorLado * G.numTrayPorLado - 1;
+        G.resolucion = RES_VALUES[v];
+        const maxIdx = G.resolucion * G.resolucion - 1;
         elInputFoco.max = maxIdx;
         if (G.trajEnFoco > maxIdx) {
           G.trajEnFoco = maxIdx;
           elInputFoco.value = maxIdx;
         }
         limpiarTrayectorias();
-        return G.numTrayPorLado;
+        G.bufDirty = true;
+        return G.resolucion;
       }
     );
   }
@@ -1134,7 +1260,7 @@ function crearControles() {
   elInputFoco = document.createElement('input');
   elInputFoco.type  = 'number';
   elInputFoco.min   = 0;
-  elInputFoco.max   = G.numTrayPorLado * G.numTrayPorLado - 1;
+  elInputFoco.max   = G.resolucion * G.resolucion - 1;
   elInputFoco.value = G.trajEnFoco;
   elInputFoco.addEventListener('change', () => {
     const maxIdx = +elInputFoco.max;
@@ -1147,6 +1273,10 @@ function crearControles() {
 
   sb.appendChild(secVis);
 
+  // En modo simple, Datos va después de Modelo y Visualización (ver
+  // arriba: en modo ancho ya se agregó en su posición original).
+  if (simple) sb.appendChild(secDatos);
+
   // NUEVO: ── Velocidad ────────────────────────────────────
   if (!simple) {
     const secVel = mkSection('Velocidad');
@@ -1158,26 +1288,36 @@ function crearControles() {
     sb.appendChild(secVel);
   }
 
-  // ── J(t) miniatura (solo modo simple) ─────────────────────
+  // ── J(t) miniatura + Acciones (solo modo simple) ──────────
+  // Ambos viven en #accSimple, la fila de acceso rápido que queda
+  // inmediatamente debajo del heatmap: J(t) a la izquierda,
+  // Entrenar/Reiniciar apilados a la derecha. Así el usuario no
+  // necesita hacer scroll para ver el progreso ni para actuar.
+  const elAccSimple = document.getElementById('accSimple');
+  elAccSimple.innerHTML = '';
+
   if (simple) {
-    const secMiniJT = mkSection('J(t)');
+    const colJT = document.createElement('div');
+    colJT.className = 'accSimple-jt';
+
     const rowLbl = document.createElement('div');
     rowLbl.className = 'ctrl-label';
     const spanJ = document.createElement('span');
-    spanJ.textContent = 'J';
+    spanJ.textContent = 'J(t)';
     const spanVal = document.createElement('span');
     spanVal.className = 'val';
     elMiniJTVal = spanVal;
     rowLbl.appendChild(spanJ);
     rowLbl.appendChild(spanVal);
-    secMiniJT.appendChild(rowLbl);
+    colJT.appendChild(rowLbl);
 
     elMiniJT = document.createElement('canvas');
     elMiniJT.style.width = '100%';
     elMiniJT.style.height = '48px';
     elMiniJT.style.background = 'transparent';
-    secMiniJT.appendChild(elMiniJT);
-    sb.appendChild(secMiniJT);
+    colJT.appendChild(elMiniJT);
+
+    elAccSimple.appendChild(colJT);
 
     ctxMiniJT = elMiniJT.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
@@ -1186,15 +1326,13 @@ function crearControles() {
     ctxMiniJT.scale(dpr, dpr);
   }
 
-  // ── Spacer ────────────────────────────────────────────────
-  const spacer = document.createElement('div');
-  spacer.id = 'sidebar-spacer';
-  sb.appendChild(spacer);
-
   // ── Acciones ─────────────────────────────────────────────
-  const secAccion = mkSection('');
+  // Modo normal: en la banda sobre el canvas, bajo el panel de datos.
+  // Modo simple: en #accSimple, junto a J(t) (ver arriba).
+  const elAcc = document.getElementById('acciones');
+  elAcc.innerHTML = '';
 
-  elBtnTrain = mkBtn('Train', 'btn-primary', () => {
+  elBtnTrain = mkBtn('Entrenar', 'btn-primary', () => {
     if (G.estado === 'animando') {
       G.estado = 'detenido';
       actualizarEstadoControles();
@@ -1206,25 +1344,36 @@ function crearControles() {
     actualizarEstadoControles();
   });
 
-  secAccion.appendChild(elBtnTrain);
+  elBtnReset = mkBtn('Reiniciar', 'btn-danger', () => {
+    limpiarTrayectorias();
+    G.bufDirty = true;
+  });
 
-  if (!simple) {
-    // NUEVO: botones de paso discreto
-    const rowSteps = document.createElement('div');
-    rowSteps.className = 'btn-group';
+  if (simple) {
+    const colBotones = document.createElement('div');
+    colBotones.className = 'accSimple-botones';
+    colBotones.appendChild(elBtnTrain);
+    colBotones.appendChild(elBtnReset);
+    elAccSimple.appendChild(colBotones);
+  } else {
+    const fila1 = document.createElement('div');
+    fila1.className = 'btn-group';
+    elBtnTrain.style.flex = '2';
+    fila1.appendChild(elBtnTrain);
+    fila1.appendChild(elBtnReset);
+
+    const fila2 = document.createElement('div');
+    fila2.className = 'btn-group';
     elBtnStep1  = mkBtn('+1',  '', () => avanzarPasos(1));
     elBtnStep10 = mkBtn('+10', '', () => avanzarPasos(10));
     elBtnStep50 = mkBtn('+50', '', () => avanzarPasos(50));
-    rowSteps.appendChild(elBtnStep1);
-    rowSteps.appendChild(elBtnStep10);
-    rowSteps.appendChild(elBtnStep50);
-    secAccion.appendChild(rowSteps);
+    fila2.appendChild(elBtnStep1);
+    fila2.appendChild(elBtnStep10);
+    fila2.appendChild(elBtnStep50);
+
+    elAcc.appendChild(fila1);
+    elAcc.appendChild(fila2);
   }
-
-  elBtnReset = mkBtn('Reset', 'btn-danger',  () => { limpiarTrayectorias(); G.bufDirty = true; });
-
-  secAccion.appendChild(elBtnReset);
-  sb.appendChild(secAccion);
 
   actualizarEstadoControles();
 }
@@ -1236,7 +1385,6 @@ function actualizarEstadoControles() {
   if (elBtnPerturbar) elBtnPerturbar.disabled = anim;
   if (elBtnBorrar)    elBtnBorrar.disabled = anim;
   if (elSliderRes)    elSliderRes.disabled  = anim;
-  if (elSliderTray)   elSliderTray.disabled = anim;
   elSliderEta.disabled  = anim;
   // NUEVO: speed siempre habilitado; step buttons habilitados cuando NO animando
   const puedeStep = !anim;
@@ -1244,7 +1392,7 @@ function actualizarEstadoControles() {
   if (elBtnStep10) elBtnStep10.disabled = !puedeStep;
   if (elBtnStep50) elBtnStep50.disabled = !puedeStep;
 
-  elBtnTrain.textContent = anim ? 'Stop' : 'Train';
+  elBtnTrain.textContent = anim ? 'Detener' : 'Entrenar';
   elBtnTrain.className   = 'btn ' + (anim ? 'btn-danger' : 'btn-primary');
   elBtnReset.disabled    = G.estado === 'idle';
 }
@@ -1285,8 +1433,7 @@ function mkSlider(parent, label, min, max, val, onChange) {
   // Display initial value via onChange which returns formatted value
   valEl.textContent = (() => {
     // peek at initial value without side-effects
-    if (label === 'Heatmap res')   return G.resHeatmap;
-    if (label === 'Trayectorias')  return G.numTrayPorLado;
+    if (label === 'Resolución')    return G.resolucion;
     if (label === 'η (lr)')        return G.eta.toFixed(3);
     if (label === 'Speed')         return G.velocidad + '×';
     return val;
@@ -1321,58 +1468,98 @@ function sliderToEta(s) {
 // BLOQUE G — setup() / draw() / eventos p5.js (modo global)
 // ═══════════════════════════════════════════════════════════════
 
+// Ancho de la columna izquierda (P1 / acciones / P3) en modo normal.
+// Se elige para que el área interior de P2 quede lo más cuadrada posible:
+// así las celdas del heatmap no se deforman y su aspecto es comparable
+// al del espacio de datos.
+function calcColIzq(W, H) {
+  let s2 = Math.min(H - PAD.t - PAD.b, Math.floor(W * 0.68) - PAD.l - PAD.r);
+  s2 = Math.max(s2, 160);
+  // En canvas angostos un mínimo fijo aplastaría a P2: se relaja con el ancho.
+  const colMax = Math.floor(W * 0.42);
+  const colMin = Math.min(280, colMax);
+  return Math.max(colMin, Math.min(colMax, W - (s2 + PAD.l + PAD.r)));
+}
+
 function calcularPaneles() {
   const W = width;
   const H = height;
 
   if (esModoSimple()) {
-    paneles.P3 = null;
-    if (H >= W) {
-      // Vertical: P1 arriba, P2 abajo
-      const mitad = Math.floor(H / 2);
-      paneles.P1 = { ox: 0, oy: 0,     cw: W, ch: mitad };
-      paneles.P2 = { ox: 0, oy: mitad, cw: W, ch: H - mitad };
-    } else {
-      // Horizontal: P1 izquierda, P2 derecha
-      const mitad = Math.floor(W / 2);
-      paneles.P1 = { ox: 0,     oy: 0, cw: mitad,     ch: H };
-      paneles.P2 = { ox: mitad, oy: 0, cw: W - mitad, ch: H };
-    }
+    // Siempre apilado vertical: P1 arriba, P2 abajo. El scroll resuelve el alto.
+    paneles.P3  = null;
+    paneles.ACC = null;
+    const mitad = Math.floor(H / 2);
+    paneles.P1 = { ox: 0, oy: 0,     cw: W, ch: mitad };
+    paneles.P2 = { ox: 0, oy: mitad, cw: W, ch: H - mitad };
     return;
   }
 
-  // P1: columna izquierda (~30%), P2: columna central (~55% = resto), P3: bajo P1 (~35% alto)
-  const colIzq  = Math.floor(W * 0.30);
-  const colCent = W - colIzq;
-  const p1h     = Math.floor(H * 0.65);
-  const p3h     = H - p1h;
+  // ── Modo normal ──────────────────────────────────────────────
+  const colIzq = calcColIzq(W, H);
+  paneles.P2 = { ox: colIzq, oy: 0, cw: W - colIzq, ch: H };
 
-  paneles.P1 = { ox: 0,       oy: 0,   cw: colIzq,  ch: p1h };
-  paneles.P2 = { ox: colIzq,  oy: 0,   cw: colCent,  ch: H   };
-  paneles.P3 = { ox: 0,       oy: p1h, cw: colIzq,  ch: p3h };
+  // Columna izquierda: P1 (interior lo más cuadrado posible), banda de
+  // acciones, y P3 con el resto.
+  // P1 quiere ser cuadrado; J(t) se acota entre 190 y 320 px y el sobrante
+  // vuelve a P1, para que ninguno de los dos se deforme sin necesidad.
+  const p1hCuad = (colIzq - PAD.l - PAD.r) + PAD.t + PAD.b;
+  let p3h = Math.max(190, Math.min(320, H - ACC_H - p1hCuad));
+  let p1h = H - ACC_H - p3h;
+  if (p1h < 180) { p1h = 180; p3h = H - ACC_H - p1h; }
+
+  paneles.P1  = { ox: 0, oy: 0,            cw: colIzq, ch: p1h  };
+  paneles.ACC = { ox: 0, oy: p1h,          cw: colIzq, ch: ACC_H };
+  paneles.P3  = { ox: 0, oy: p1h + ACC_H,  cw: colIzq, ch: p3h  };
+}
+
+// Coloca el div de botones sobre la banda reservada del canvas.
+// Los botones no tienen ejes que dibujar, así que ocupan el ancho PLENO
+// de la columna (igual que el contorno de P1/P3) — no el PAD.l/PAD.r que
+// esos paneles reservan para sus etiquetas de eje vertical.
+const MARGEN_ACC = 4;
+function posicionarAcciones() {
+  const el = document.getElementById('acciones');
+  if (!el) return;
+  if (!paneles.ACC || esModoSimple()) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.style.left  = (paneles.ACC.ox + MARGEN_ACC) + 'px';
+  el.style.top   = (paneles.ACC.oy + 6) + 'px';
+  el.style.width = (paneles.ACC.cw - 2 * MARGEN_ACC) + 'px';
+}
+
+// Altura natural del sidebar: techo de altura para el canvas en modo normal,
+// para que ambas columnas se vean a la par (idea del autor). Si la ventana
+// es más baja que este valor, el min-height de #main y el scroll resuelven;
+// esto nunca depende de innerHeight, solo del contenido real del sidebar.
+function alturaSidebar() {
+  const sb = document.getElementById('sidebar');
+  return sb ? sb.getBoundingClientRect().height : 0;
 }
 
 function dimensionesCanvas() {
   const wrap = document.getElementById('canvas-wrap');
-  if (!esModoSimple()) {
-    return { w: wrap.clientWidth, h: wrap.clientHeight };
-  }
   const w = wrap.clientWidth;
-  if (windowHeight >= windowWidth) {
-    // Vertical: dos paneles apilados
-    return { w, h: 1.7 * w };
+  if (!esModoSimple()) {
+    const techo = alturaSidebar();
+    const h = techo > 0 ? Math.min(wrap.clientHeight, techo) : wrap.clientHeight;
+    return { w, h };
   }
-  // Horizontal: dos paneles lado a lado
-  return { w, h: Math.min(w / 2, windowHeight * 0.75) };
+  // Modo simple: dos paneles apilados, cada uno con interior cuadrado.
+  // La altura sale del ancho; el alto de la ventana no interviene.
+  const altoPanel = (w - PAD.l - PAD.r) + PAD.t + PAD.b;
+  return { w, h: 2 * altoPanel };
 }
 
 function setup() {
+  aplicarClaseModo();
+  G.modoSimpleActual = esModoSimple();
+  crearControles();            // el sidebar debe existir antes de medirlo
   const { w, h } = dimensionesCanvas();
   const cnv = createCanvas(w, h);
   cnv.parent('canvas-wrap');
-  G.modoSimpleActual = esModoSimple();
   calcularPaneles();
-  crearControles();
+  posicionarAcciones();
   frameRate(60);
 }
 
@@ -1392,18 +1579,23 @@ function draw() {
 }
 
 function windowResized() {
-  const { w, h } = dimensionesCanvas();
-  resizeCanvas(w, h);
-  calcularPaneles();
-  G.bufDirty = true;
+  const nuevo  = esModoSimple();
+  const cambio = nuevo !== G.modoSimpleActual;
 
-  const nuevo = esModoSimple();
-  if (nuevo !== G.modoSimpleActual) {
+  // La clase debe aplicarse ANTES de medir el wrap: el CSS depende de ella.
+  aplicarClaseModo();
+
+  if (cambio) {
     G.modoSimpleActual = nuevo;
     limpiarTrayectorias();
     crearControles();
-    G.bufDirty = true;
   }
+
+  const { w, h } = dimensionesCanvas();
+  resizeCanvas(w, h);
+  calcularPaneles();
+  posicionarAcciones();
+  G.bufDirty = true;
 }
 
 function encontrarPunto(mx, my, umbral) {

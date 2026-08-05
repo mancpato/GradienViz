@@ -21,7 +21,7 @@ Los cinco documentos comparten notación, formato y estilo. Pueden usarse de for
 
 ## Uso
 
-Descarga `GradienViz.html` y ábrelo en cualquier navegador moderno. No requiere conexión a internet una vez descargado.
+Descarga `index.html` y ábrelo en cualquier navegador moderno. No requiere conexión a internet una vez descargado.
 
 ```
 git clone https://github.com/mancpato/GradienViz.git
@@ -78,8 +78,7 @@ Cualquier cambio en los datos recalcula automáticamente la solución óptima y 
 El punto (m, b) hace *snap* al centro de la celda de la grilla bajo el cursor, sin interpolación continua. Permite relacionar visualmente cualquier punto del espacio de parámetros con la recta que representa en el espacio de datos, sin necesidad de iniciar el entrenamiento.
 
 ### Modelo
-- **Heatmap res**: resolución de la malla de la superficie J(m,b) — valores {6, 8, 10, 12, 16}
-- **Trayectorias**: número de trayectorias por lado de la grilla — valores {2, 3, 4, 5, 6} → entre 4 y 36 trayectorias totales
+- **Resolución**: un único control que gobierna a la vez la malla del heatmap y la grilla de puntos iniciales de las trayectorias (N×N, una trayectoria nace en el centro de cada celda) — valores {4, 6, 8} → entre 16 y 64 trayectorias totales
 - **η (lr)**: tasa de aprendizaje en escala logarítmica, rango [0.001, 0.5]
 
 ### Visualización
@@ -87,37 +86,42 @@ El punto (m, b) hace *snap* al centro de la celda de la grilla bajo el cursor, s
 - **Foco tray.**: índice de la trayectoria destacada en naranja (visible en ambos paneles)
 
 ### Velocidad
-Controla cuántas iteraciones se ejecutan por frame. El valor 1× es suficiente para observar la convergencia en tiempo real. Para avanzar paso a paso usar los botones **+1**, **+10**, **+50** con la animación detenida.
+Controla cuántas iteraciones se ejecutan por frame — valores {1, 2, 5, 10, 20, 50, 100}×. El valor 1× es suficiente para observar la convergencia en tiempo real. Para avanzar paso a paso usar los botones **+1**, **+10**, **+50** con la animación detenida. Este slider nunca se deshabilita: se puede ajustar en caliente incluso durante la animación.
 
 ### Entrenamiento
-- **Train**: inicia el descenso por gradiente desde una grilla uniforme de puntos iniciales
-- **Stop**: pausa la animación (se puede reanudar con Train)
-- **Reset**: limpia trayectorias y vuelve al estado inicial
+- **Entrenar / Detener**: un solo botón que alterna texto y color según el estado — inicia el descenso por gradiente desde una grilla uniforme de puntos iniciales, o pausa la animación en curso (se puede reanudar)
+- **Reiniciar**: limpia trayectorias y vuelve al estado inicial
 
 ---
 
-## Modo simple (pantallas pequeñas)
+## Modo simple (pantallas angostas)
 
-Se activa automáticamente cuando `min(ancho, alto)` de la ventana es menor a 768px — es un criterio de *viewport*, no de tipo de dispositivo. Aplica igual en un celular, una tablet chica, o una ventana de escritorio angosta.
+Se activa automáticamente cuando el **ancho** de la ventana (`window.innerWidth`) es menor a 768px — es el único criterio, deliberadamente independiente de la altura y del tipo de dispositivo. Aplica igual en un celular, una tablet chica en vertical, o una ventana de escritorio angosta.
 
-**Layout**: solo se muestran los paneles de datos y de parámetros (P1 y P2), completos, sin el panel inferior de J(t). Se apilan en vertical o se colocan lado a lado en horizontal según la orientación de la pantalla. La página permite scroll natural en vez de comprimirse a un viewport fijo.
+**Layout**: el panel de datos y el heatmap de parámetros se apilan en una sola columna a todo lo ancho (sin el panel P1/P2 lado a lado del modo normal). Justo debajo del heatmap hay una fila de acceso rápido con dos columnas:
 
-Los controles se reducen a lo esencial para no saturar el sidebar en pantallas chicas:
+- **J(t)** — sparkline miniatura con el valor actual de J, a la izquierda
+- **Entrenar / Reiniciar** — apilados, a la derecha
+
+Debajo de esa fila, el resto de los controles (Modelo, Visualización, Datos) se acomodan en un panel a todo lo ancho, en ese orden — Datos queda al final porque se usa con menor frecuencia que Entrenar/Reiniciar durante una sesión de exploración. La página permite scroll natural en vez de comprimirse a un viewport fijo.
+
+Los controles se reducen a lo esencial para no saturar el panel en pantallas chicas:
 
 | Control | Modo normal | Modo simple |
 |---|---|---|
-| Heatmap res | ajustable | fijo en 8 |
-| Trayectorias | ajustable | fijo en 2 (4 trayectorias, en las esquinas) |
+| Resolución (heatmap + trayectorias) | ajustable {4, 6, 8} | fija en 4 (16 trayectorias) |
 | Velocidad | ajustable | fija en 5× |
 | η (lr) | ajustable | ajustable (el único slider que se conserva) |
-| Perturbar | disponible | no disponible |
+| Perturbar | disponible | no disponible (sustituido por "Borrar todo") |
 | Pasos +1/+10/+50 | disponibles | no disponibles |
 | Puntos: agregar | click | tap |
 | Puntos: mover | arrastrar | no disponible |
-| Puntos: borrar | Ctrl+Click individual | botón "Borrar todo" |
-| Panel J(t) | panel completo con banda ±σ | sparkline miniatura en el sidebar |
+| Puntos: borrar | Ctrl+Click individual | botón "Borrar todo" (borra todos a la vez) |
+| Panel J(t) | panel completo con banda ±σ | sparkline miniatura junto a Entrenar/Reiniciar |
 
-El modo se reevalúa en vivo: al girar el dispositivo o redimensionar la ventana cruzando el umbral, la interfaz cambia sin recargar la página.
+Al pasar a modo simple, los valores de resolución y velocidad del usuario se respaldan internamente y se restauran al volver a modo normal (no se pierden por cruzar el umbral).
+
+El modo se reevalúa en vivo: al redimensionar la ventana cruzando el umbral de ancho, la interfaz cambia sin recargar la página.
 
 Pensado para que los alumnos puedan explorar el visualizador desde su propio celular durante la clase, con foco exclusivo en el efecto de η sobre la convergencia.
 
@@ -162,6 +166,6 @@ Forma parte de una colección de herramientas de visualización pedagógica impl
 
 ## Elaborado por
 
-*Miguel Ángel Norzagaray Cosío*, DASC/UABCS — concepción, diseño pedagógico, ediciones menores y todas las decisiones del proyecto.
+*Miguel Ángel Norzagaray Cosío*, UABCS — concepción, diseño pedagógico, ediciones menores y todas las decisiones del proyecto.
 
 **Asistencia técnica**: *Claude Sonnet* (Anthropic) — implementación, depuración, optimización y documentación bajo dirección del autor.
